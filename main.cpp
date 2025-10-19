@@ -40,13 +40,20 @@ private:
     Clock spawnClock;
     bool firstFrame = true;
     
+    // Счет
+    int score = 0;
+    Clock scoreClock;
+    Text* scoreText = nullptr;
+    
     // Меню
-    enum GameState { MENU, PLAYING, GAME_OVER };
+    enum GameState { MENU, PLAYING, CONTROLS, GAME_OVER };
     GameState currentState = MENU;
     Font font;
     Text* titleText = nullptr;
     Text* playText = nullptr;
+    Text* controlsText = nullptr;
     Text* exitText = nullptr;
+    Text* backText = nullptr;
     
 public:
     SimpleGame() : window(VideoMode({600, 600}), "Russia runner") {
@@ -58,14 +65,16 @@ public:
         if (playerSprite) delete playerSprite;
         if (titleText) delete titleText;
         if (playText) delete playText;
+        if (controlsText) delete controlsText;
         if (exitText) delete exitText;
+        if (backText) delete backText;
+        if (scoreText) delete scoreText;
     }
     
     void setup() {
         // Загружаем шрифт
         if (!font.openFromFile("C:/Windows/Fonts/arial.ttf")) {
             std::cout << "❌ Не удалось загрузить шрифт" << std::endl;
-            // Создаем базовый шрифт если не загрузился
         }
         
         // Создаем тексты меню
@@ -77,9 +86,18 @@ public:
         playText->setFillColor(Color::White);
         playText->setPosition({250.0f, 300.0f});
         
+        controlsText = new Text(font, "CONTROLS", 40);
+        controlsText->setFillColor(Color::White);
+        controlsText->setPosition({230.0f, 370.0f});
+        
         exitText = new Text(font, "EXIT", 40);
         exitText->setFillColor(Color::White);
-        exitText->setPosition({250.0f, 370.0f});
+        exitText->setPosition({250.0f, 440.0f});
+        
+        // Инициализация счета
+        scoreText = new Text(font, "Score: 0", 30);
+        scoreText->setFillColor(Color::White);
+        scoreText->setPosition({10.0f, 10.0f});
         
         // Загружаем текстуры
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {
@@ -115,42 +133,72 @@ public:
     }
     
     void handleMenuInput() {
-    for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
-        if (event->is<Event::Closed>()) {
-            window.close();
-            return;
-        }
-        
-        if (auto mousePressed = event->getIf<Event::MouseButtonPressed>()) {
-            if (mousePressed->button == Mouse::Button::Left) {
-                Vector2f mousePos = window.mapPixelToCoords({mousePressed->position.x, mousePressed->position.y});
-                
-                // Проверяем клик на кнопке "ИГРАТЬ"
-                if (playText->getGlobalBounds().contains(mousePos)) {
+        for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
+            if (event->is<Event::Closed>()) {
+                window.close();
+                return;
+            }
+            
+            if (auto mousePressed = event->getIf<Event::MouseButtonPressed>()) {
+                if (mousePressed->button == Mouse::Button::Left) {
+                    Vector2f mousePos = window.mapPixelToCoords({mousePressed->position.x, mousePressed->position.y});
+                    
+                    // Проверяем клик на кнопке "GAME"
+                    if (playText->getGlobalBounds().contains(mousePos)) {
+                        currentState = PLAYING;
+                        resetGame();
+                        std::cout << "🎮 Начало игры!" << std::endl;
+                    }
+                    
+                    // Проверяем клик на кнопке "CONTROLS"
+                    if (controlsText->getGlobalBounds().contains(mousePos)) {
+                        currentState = CONTROLS;
+                        std::cout << "🎮 Просмотр управления!" << std::endl;
+                    }
+                    
+                    // Проверяем клик на кнопке "EXIT"
+                    if (exitText->getGlobalBounds().contains(mousePos)) {
+                        window.close();
+                    }
+                }
+            }
+            
+            if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
+                if (keyPressed->scancode == Keyboard::Scan::Enter) {
                     currentState = PLAYING;
-                    resetGame();  // ДОБАВЛЕНО - сброс игры при начале
+                    resetGame();
                     std::cout << "🎮 Начало игры!" << std::endl;
                 }
-                
-                // Проверяем клик на кнопке "ВЫХОД"
-                if (exitText->getGlobalBounds().contains(mousePos)) {
+                else if (keyPressed->scancode == Keyboard::Scan::Escape) {
                     window.close();
                 }
             }
         }
-        
-        if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
-            if (keyPressed->scancode == Keyboard::Scan::Enter) {
-                currentState = PLAYING;
-                resetGame();  // ДОБАВЛЕНО - сброс игры при начале
-                std::cout << "🎮 Начало игры!" << std::endl;
-            }
-            else if (keyPressed->scancode == Keyboard::Scan::Escape) {
+    }
+    
+    void handleControlsInput() {
+        for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
+            if (event->is<Event::Closed>()) {
                 window.close();
+                return;
+            }
+            
+            if (auto mousePressed = event->getIf<Event::MouseButtonPressed>()) {
+                if (mousePressed->button == Mouse::Button::Left) {
+                    Vector2f mousePos = window.mapPixelToCoords({mousePressed->position.x, mousePressed->position.y});
+                    if (backText && backText->getGlobalBounds().contains(mousePos)) {
+                        currentState = MENU;
+                    }
+                }
+            }
+            
+            if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
+                if (keyPressed->scancode == Keyboard::Scan::Escape) {
+                    currentState = MENU;
+                }
             }
         }
     }
-}
     
     void renderMenu() {
         window.clear(Color(30, 30, 30));
@@ -158,7 +206,45 @@ public:
         // Отрисовка элементов меню
         window.draw(*titleText);
         window.draw(*playText);
+        window.draw(*controlsText);
         window.draw(*exitText);
+        
+        window.display();
+    }
+    
+    void renderControls() {
+        window.clear(Color(30, 30, 50));
+        
+        Text controlsTitle(font, "CONTROLS", 50);
+        controlsTitle.setFillColor(Color::Yellow);
+        controlsTitle.setPosition({200.0f, 100.0f});
+        
+        Text moveText(font, "A/D or LEFT/RIGHT - Move", 30);
+        moveText.setFillColor(Color::White);
+        moveText.setPosition({150.0f, 200.0f});
+        
+        Text jumpText(font, "W or SPACE - Jump", 30);
+        jumpText.setFillColor(Color::White);
+        jumpText.setPosition({150.0f, 250.0f});
+        
+        Text menuText(font, "ESC - Back to Menu", 30);
+        menuText.setFillColor(Color::White);
+        menuText.setPosition({150.0f, 300.0f});
+        
+        Text restartText(font, "R - Restart (in game)", 30);
+        restartText.setFillColor(Color::White);
+        restartText.setPosition({150.0f, 350.0f});
+        
+        backText = new Text(font, "BACK (ESC)", 35);
+        backText->setFillColor(Color::Green);
+        backText->setPosition({220.0f, 450.0f});
+        
+        window.draw(controlsTitle);
+        window.draw(moveText);
+        window.draw(jumpText);
+        window.draw(menuText);
+        window.draw(restartText);
+        window.draw(*backText);
         
         window.display();
     }
@@ -242,40 +328,39 @@ public:
     }
     
     void handleGameInput() {
-    for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
-        if (event->is<Event::Closed>()) {
-            window.close();
-            return;
-        }
-        
-        if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
-            if (keyPressed->scancode == Keyboard::Scan::A || keyPressed->scancode == Keyboard::Scan::Left) {
-                if (currentLane > 0) currentLane--;
-                updatePlayerPosition();
+        for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
+            if (event->is<Event::Closed>()) {
+                window.close();
+                return;
             }
-            else if (keyPressed->scancode == Keyboard::Scan::D || keyPressed->scancode == Keyboard::Scan::Right) {
-                if (currentLane < 2) currentLane++;
-                updatePlayerPosition();
-            }
-            else if (keyPressed->scancode == Keyboard::Scan::W || keyPressed->scancode == Keyboard::Scan::Space) {
-                if (!isJumping && !isFalling) {
-                    isJumping = true;
-                    jumpHeight = 0.0f;
+            
+            if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
+                if (keyPressed->scancode == Keyboard::Scan::A || keyPressed->scancode == Keyboard::Scan::Left) {
+                    if (currentLane > 0) currentLane--;
+                    updatePlayerPosition();
                 }
-            }
-            else if (keyPressed->scancode == Keyboard::Scan::Escape) {
-                currentState = MENU;
-                resetGame();
-            }
-            else if (keyPressed->scancode == Keyboard::Scan::R && currentState == GAME_OVER) {
-                // ТОЛЬКО КОГДА ИГРА ОКОНЧЕНА
-                currentState = PLAYING;
-                resetGame();
-                std::cout << "🔄 Рестарт игры!" << std::endl;
+                else if (keyPressed->scancode == Keyboard::Scan::D || keyPressed->scancode == Keyboard::Scan::Right) {
+                    if (currentLane < 2) currentLane++;
+                    updatePlayerPosition();
+                }
+                else if (keyPressed->scancode == Keyboard::Scan::W || keyPressed->scancode == Keyboard::Scan::Space) {
+                    if (!isJumping && !isFalling) {
+                        isJumping = true;
+                        jumpHeight = 0.0f;
+                    }
+                }
+                else if (keyPressed->scancode == Keyboard::Scan::Escape) {
+                    currentState = MENU;
+                    resetGame();
+                }
+                else if (keyPressed->scancode == Keyboard::Scan::R && currentState == GAME_OVER) {
+                    currentState = PLAYING;
+                    resetGame();
+                    std::cout << "🔄 Рестарт игры!" << std::endl;
+                }
             }
         }
     }
-}
     
     void resetGame() {
         obstacles.clear();
@@ -283,12 +368,22 @@ public:
         isJumping = false;
         isFalling = false;
         jumpHeight = 0.0f;
+        score = 0;  // Сбрасываем счет
+        scoreClock.restart();  // Сбрасываем таймер счета
+        
+        // Обновляем текст счета
+        if (scoreText) {
+            scoreText->setString("Score: 0");
+        }
+        
         updatePlayerPosition();
         spawnClock.restart();
+        firstFrame = true;
         std::cout << "🔄 Игра сброшена!" << std::endl;
     }
     
     void update(float deltaTime) {
+        // Обновление прыжка
         if (isJumping) {
             jumpHeight += jumpSpeed * deltaTime;
             if (jumpHeight >= maxJumpHeight) {
@@ -304,6 +399,19 @@ public:
                 jumpHeight = 0.0f;
             }
             updatePlayerPosition();
+        }
+        
+        // Обновление счета (+10 очков каждую секунду)
+        if (scoreClock.getElapsedTime().asSeconds() >= 1.0f) {
+            score += 10;
+            scoreClock.restart();
+            
+            // Обновляем текст счета
+            if (scoreText) {
+                scoreText->setString("Score: " + std::to_string(score));
+            }
+            
+            std::cout << "⭐ Score: " << score << std::endl;
         }
         
         spawnObstacle();
@@ -366,6 +474,11 @@ public:
             }
         }
         
+        // Отрисовка счета
+        if (scoreText) {
+            window.draw(*scoreText);
+        }
+        
         if (playerSprite) {
             window.draw(*playerSprite);
         } else {
@@ -384,7 +497,12 @@ public:
         // Создаем тексты для экрана завершения
         Text gameOverText(font, "GAME OVER!", 40);
         gameOverText.setFillColor(Color::Red);
-        gameOverText.setPosition({180.0f, 200.0f});
+        gameOverText.setPosition({180.0f, 150.0f});
+        
+        // Финальный счет
+        Text scoreText(font, "Final Score: " + std::to_string(score), 35);
+        scoreText.setFillColor(Color::Yellow);
+        scoreText.setPosition({170.0f, 220.0f});
         
         Text restartText(font, "Press R for restart", 30);
         restartText.setFillColor(Color::White);
@@ -395,6 +513,7 @@ public:
         menuText.setPosition({170.0f, 350.0f});
         
         window.draw(gameOverText);
+        window.draw(scoreText);
         window.draw(restartText);
         window.draw(menuText);
         
@@ -420,6 +539,11 @@ public:
                     handleGameInput();
                     update(deltaTime);
                     renderGame();
+                    break;
+                    
+                case CONTROLS:
+                    handleControlsInput();
+                    renderControls();
                     break;
                     
                 case GAME_OVER:
