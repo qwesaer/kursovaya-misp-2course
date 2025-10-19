@@ -17,6 +17,13 @@ private:
     Texture garageTexture;
     Sprite* playerSprite = nullptr;
     
+    // Анимация персонажа
+    std::vector<Texture> runTextures;
+    int currentFrame = 0;
+    float animationTimer = 0.0f;
+    float frameTime = 0.1f;
+    bool isMoving = false;
+    
     // Игрок
     int currentLane = 1;
     bool isJumping = false;
@@ -31,7 +38,7 @@ private:
     
     // Препятствия
     struct Obstacle {
-        int type; // 0 - лавка, 1 - гараж
+        int type;
         Vector2f position;
         Vector2f size;
     };
@@ -72,12 +79,10 @@ public:
     }
     
     void setup() {
-        // Загружаем шрифт
         if (!font.openFromFile("C:/Windows/Fonts/arial.ttf")) {
             std::cout << "❌ Не удалось загрузить шрифт" << std::endl;
         }
         
-        // Создаем тексты меню
         titleText = new Text(font, "RUSSIA RUNNER", 50);
         titleText->setFillColor(Color::Red);
         titleText->setPosition({150.0f, 150.0f});
@@ -94,12 +99,22 @@ public:
         exitText->setFillColor(Color::White);
         exitText->setPosition({250.0f, 440.0f});
         
-        // Инициализация счета
         scoreText = new Text(font, "Score: 0", 30);
         scoreText->setFillColor(Color::White);
         scoreText->setPosition({10.0f, 10.0f});
         
-        // Загружаем текстуры
+        // Загружаем текстуры анимации
+        for (int i = 1; i <= 4; ++i) {
+            Texture texture;
+            std::string filename = "spryte/run" + std::to_string(i) + ".png";
+            if (!texture.loadFromFile(filename)) {
+                std::cout << "❌ Не удалось загрузить " << filename << std::endl;
+            } else {
+                runTextures.push_back(texture);
+                std::cout << "✅ Загружен кадр анимации: " << filename << std::endl;
+            }
+        }
+        
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {
             std::cout << "❌ Не удалось загрузить spryte/beanch.png" << std::endl;
         } else {
@@ -112,23 +127,40 @@ public:
             std::cout << "✅ Загружен спрайт гаража" << std::endl;
         }
         
-        // Настройка полос
         float totalWidth = window.getSize().x;
         laneWidth = totalWidth / 4.0f;
         float offset = (totalWidth - (laneWidth * 3)) / 2.0f;
         lanePositions = {offset, offset + laneWidth, offset + laneWidth * 2};
         
-        // Текстура игрока
-        if (playerTexture.loadFromFile("spryte/player.png")) {
-            std::cout << "✅ Загружен спрайт персонажа" << std::endl;
+        // Создаем спрайт игрока
+        if (!runTextures.empty()) {
+            playerSprite = new Sprite(runTextures[0]);
+            std::cout << "✅ Анимация персонажа загружена, кадров: " << runTextures.size() << std::endl;
+        } else if (playerTexture.loadFromFile("spryte/player.png")) {
             playerSprite = new Sprite(playerTexture);
-            playerSprite->setScale({0.8f, 0.8f});
+            std::cout << "✅ Загружен спрайт персонажа" << std::endl;
+        } else if (benchTexture.getSize().x > 0) {
+            playerSprite = new Sprite(benchTexture);
+            std::cout << "⚠️ Использована текстура лавки для персонажа" << std::endl;
+        } else if (garageTexture.getSize().x > 0) {
+            playerSprite = new Sprite(garageTexture);
+            std::cout << "⚠️ Использована текстура гаража для персонажа" << std::endl;
         } else {
-            std::cout << "❌ Не удалось загрузить spryte/player.png" << std::endl;
+            // Просто используем первую доступную текстуру из анимации
+            if (!runTextures.empty()) {
+                playerSprite = new Sprite(runTextures[0]);
+            } else {
+                // Если совсем нет текстур, пропускаем создание спрайта
+                playerSprite = nullptr;
+                std::cout << "❌ Не удалось создать спрайт персонажа" << std::endl;
+            }
+        }
+        
+        if (playerSprite) {
+            playerSprite->setScale({0.8f, 0.8f});
         }
         
         updatePlayerPosition();
-        
         std::cout << "✅ Игра инициализирована" << std::endl;
     }
     
@@ -143,20 +175,17 @@ public:
                 if (mousePressed->button == Mouse::Button::Left) {
                     Vector2f mousePos = window.mapPixelToCoords({mousePressed->position.x, mousePressed->position.y});
                     
-                    // Проверяем клик на кнопке "GAME"
                     if (playText->getGlobalBounds().contains(mousePos)) {
                         currentState = PLAYING;
                         resetGame();
                         std::cout << "🎮 Начало игры!" << std::endl;
                     }
                     
-                    // Проверяем клик на кнопке "CONTROLS"
                     if (controlsText->getGlobalBounds().contains(mousePos)) {
                         currentState = CONTROLS;
                         std::cout << "🎮 Просмотр управления!" << std::endl;
                     }
                     
-                    // Проверяем клик на кнопке "EXIT"
                     if (exitText->getGlobalBounds().contains(mousePos)) {
                         window.close();
                     }
@@ -202,13 +231,10 @@ public:
     
     void renderMenu() {
         window.clear(Color(30, 30, 30));
-        
-        // Отрисовка элементов меню
         window.draw(*titleText);
         window.draw(*playText);
         window.draw(*controlsText);
         window.draw(*exitText);
-        
         window.display();
     }
     
@@ -336,17 +362,24 @@ public:
             
             if (auto keyPressed = event->getIf<Event::KeyPressed>()) {
                 if (keyPressed->scancode == Keyboard::Scan::A || keyPressed->scancode == Keyboard::Scan::Left) {
-                    if (currentLane > 0) currentLane--;
+                    if (currentLane > 0) {
+                        currentLane--;
+                        std::cout << "← Движение влево, полоса: " << currentLane << std::endl;
+                    }
                     updatePlayerPosition();
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::D || keyPressed->scancode == Keyboard::Scan::Right) {
-                    if (currentLane < 2) currentLane++;
+                    if (currentLane < 2) {
+                        currentLane++;
+                        std::cout << "→ Движение вправо, полоса: " << currentLane << std::endl;
+                    }
                     updatePlayerPosition();
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::W || keyPressed->scancode == Keyboard::Scan::Space) {
                     if (!isJumping && !isFalling) {
                         isJumping = true;
                         jumpHeight = 0.0f;
+                        std::cout << "↑ Прыжок!" << std::endl;
                     }
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::Escape) {
@@ -368,10 +401,16 @@ public:
         isJumping = false;
         isFalling = false;
         jumpHeight = 0.0f;
-        score = 0;  // Сбрасываем счет
-        scoreClock.restart();  // Сбрасываем таймер счета
+        score = 0;
+        scoreClock.restart();
         
-        // Обновляем текст счета
+        currentFrame = 0;
+        animationTimer = 0.0f;
+        
+        if (!runTextures.empty() && playerSprite) {
+            playerSprite->setTexture(runTextures[0]);
+        }
+        
         if (scoreText) {
             scoreText->setString("Score: 0");
         }
@@ -383,7 +422,17 @@ public:
     }
     
     void update(float deltaTime) {
-        // Обновление прыжка
+        // АНИМАЦИЯ ВСЕГДА РАБОТАЕТ - УБРАЛ ПРОВЕРКУ isMoving
+        if (!runTextures.empty() && playerSprite) {
+            animationTimer += deltaTime;
+            if (animationTimer >= frameTime) {
+                currentFrame = (currentFrame + 1) % runTextures.size();
+                playerSprite->setTexture(runTextures[currentFrame]);
+                animationTimer = 0.0f;
+                std::cout << "🎬 Кадр анимации: " << currentFrame + 1 << "/" << runTextures.size() << std::endl;
+            }
+        }
+        
         if (isJumping) {
             jumpHeight += jumpSpeed * deltaTime;
             if (jumpHeight >= maxJumpHeight) {
@@ -401,12 +450,10 @@ public:
             updatePlayerPosition();
         }
         
-        // Обновление счета (+10 очков каждую секунду)
         if (scoreClock.getElapsedTime().asSeconds() >= 1.0f) {
             score += 10;
             scoreClock.restart();
             
-            // Обновляем текст счета
             if (scoreText) {
                 scoreText->setString("Score: " + std::to_string(score));
             }
@@ -422,7 +469,6 @@ public:
     void renderGame() {
         window.clear(Color(100, 100, 100));
         
-        // Отрисовка дороги и препятствий
         static Texture roadTexture;
         static bool textureLoaded = roadTexture.loadFromFile("spryte/road.png");
         static Vector2u originalRoadSize = textureLoaded ? roadTexture.getSize() : Vector2u{338, 333};
@@ -474,7 +520,6 @@ public:
             }
         }
         
-        // Отрисовка счета
         if (scoreText) {
             window.draw(*scoreText);
         }
@@ -494,12 +539,10 @@ public:
     void renderGameOver() {
         window.clear(Color(30, 0, 0));
         
-        // Создаем тексты для экрана завершения
         Text gameOverText(font, "GAME OVER!", 40);
         gameOverText.setFillColor(Color::Red);
         gameOverText.setPosition({180.0f, 150.0f});
         
-        // Финальный счет
         Text scoreText(font, "Final Score: " + std::to_string(score), 35);
         scoreText.setFillColor(Color::Yellow);
         scoreText.setPosition({170.0f, 220.0f});
