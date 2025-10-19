@@ -11,111 +11,157 @@ class SimpleGame {
 private:
     RenderWindow window;
     
+    // Текстуры и спрайты
+    Texture playerTexture;
+    Texture benchTexture;
+    Sprite* playerSprite = nullptr;
+    
     // Игрок
-    RectangleShape player;
     int currentLane = 1;
     bool isJumping = false;
+    bool isFalling = false;
     float jumpHeight = 0.0f;
-    float jumpSpeed = 500.0f;
+    float jumpSpeed = 400.0f;
+    float maxJumpHeight = 150.0f;
     
     // Полосы
     float laneWidth;
     std::vector<float> lanePositions;
     
     // Препятствия
-    std::vector<RectangleShape> obstacles;
-    float obstacleSpeed = 150.0f;
+    struct Obstacle {
+        int type; // 0 - лавка, 1 - гараж
+        Vector2f position;
+        Vector2f size;
+    };
+    std::vector<Obstacle> obstacles;
+    float obstacleSpeed = 300.0f;
     Clock spawnClock;
     bool firstFrame = true;
     
 public:
-    SimpleGame() : window(VideoMode({800, 600}), "Бегун - 3 полосы") {
+    SimpleGame() : window(VideoMode({600, 600}), "Russia runner") {
         std::srand(std::time(nullptr));
         setup();
     }
     
-    void setup() {
-        // Настройка полос
-        laneWidth = window.getSize().x / 3.0f;
-        lanePositions = {0, laneWidth, laneWidth * 2};
-        
-        // Настройка игрока
-        player.setSize({50.0f, 50.0f});
-        player.setFillColor(Color::Blue);
-        updatePlayerPosition();
-        
-        std::cout << "✅ Игра инициализирована" << std::endl;
+    ~SimpleGame() {
+        if (playerSprite) delete playerSprite;
     }
     
+    void setup() {
+    // Загружаем текстуру лавки из папки spryte
+    if (!benchTexture.loadFromFile("spryte/beanch.png")) {
+        std::cout << "❌ Не удалось загрузить spryte/beanch.png" << std::endl;
+    } else {
+        std::cout << "✅ Загружен спрайт лавки" << std::endl;
+    }
+    
+    // Настройка полос - узкие, по центру
+    float totalWidth = window.getSize().x;
+    laneWidth = totalWidth / 4.0f;
+    float offset = (totalWidth - (laneWidth * 3)) / 2.0f;
+    lanePositions = {offset, offset + laneWidth, offset + laneWidth * 2};
+    
+    // Пытаемся загрузить текстуру игрока из папки spryte
+    if (playerTexture.loadFromFile("spryte/player.png")) {
+        std::cout << "✅ Загружен спрайт персонажа" << std::endl;
+        playerSprite = new Sprite(playerTexture);
+        playerSprite->setScale({0.8f, 0.8f});
+    } else {
+        std::cout << "❌ Не удалось загрузить spryte/player.png" << std::endl;
+        std::cout << "💡 Использую синий квадрат" << std::endl;
+    }
+    
+    updatePlayerPosition();
+    
+    std::cout << "✅ Игра инициализирована" << std::endl;
+    std::cout << "🛣️ 3 узкие полосы (ширина: " << laneWidth << "px)" << std::endl;
+    std::cout << "📁 Спрайты загружаются из папки: spryte/" << std::endl;
+}
+    
     void updatePlayerPosition() {
-        float x = lanePositions[currentLane] + laneWidth/2 - 25;
-        float y = isJumping ? 500.0f - jumpHeight : 500.0f;
-        player.setPosition({x, y});
+        float x, y;
+        
+        if (playerSprite) {
+            FloatRect bounds = playerSprite->getGlobalBounds();
+            x = lanePositions[currentLane] + laneWidth/2 - 25;
+            y = 500.0f - jumpHeight;
+            playerSprite->setPosition({x, y});
+        } else {
+            x = lanePositions[currentLane] + laneWidth/2 - 25;
+            y = 500.0f - jumpHeight;
+        }
     }
     
     void spawnObstacle() {
-        // Спавним каждые 1.5 секунды
-        if (spawnClock.getElapsedTime().asSeconds() > 1.5f) {
-            RectangleShape obstacle;
-            obstacle.setSize({60.0f, 60.0f});
+        if (spawnClock.getElapsedTime().asSeconds() > 0.8f) {
+            Obstacle obstacle;
+            obstacle.type = std::rand() % 2;
             
-            // Случайный цвет для разных типов препятствий
-            Color obstacleColors[] = {
-                Color::Red,     // Мент
-                Color(255, 100, 0), // Гопник  
-                Color::Green,   // Лавка
-                Color::Magenta, // Гараж
-                Color::Yellow,  // Мухтар
-                Color::Cyan     // Бобик
-            };
-            obstacle.setFillColor(obstacleColors[std::rand() % 6]);
+            if (obstacle.type == 0) {
+                // ЛАВКА
+                obstacle.size = Vector2f{60.0f, 30.0f};
+            } else {
+                // ГАРАЖ
+                obstacle.size = Vector2f{80.0f, 80.0f};
+            }
             
-            // СЛУЧАЙНАЯ ПОЛОСА (0, 1 или 2)
             int lane = std::rand() % 3;
-            float x = lanePositions[lane] + laneWidth/2 - 30;
-            obstacle.setPosition({x, -80.0f}); // Начинаем выше экрана
+            float x = lanePositions[lane] + laneWidth/2 - obstacle.size.x/2;
+            obstacle.position = {x, -obstacle.size.y};
             
             obstacles.push_back(obstacle);
             spawnClock.restart();
-            
-            std::cout << "🆕 Создано препятствие на полосе " << lane << std::endl;
         }
     }
     
     void updateObstacles(float deltaTime) {
-        // Пропускаем первый кадр
         if (firstFrame) {
             firstFrame = false;
             return;
         }
         
-        // Ограничиваем deltaTime
         if (deltaTime > 0.1f) deltaTime = 0.1f;
         
-        // Движение препятствий вниз
         for (auto& obstacle : obstacles) {
-            obstacle.move({0, obstacleSpeed * deltaTime});
+            obstacle.position.y += obstacleSpeed * deltaTime;
         }
         
-        // Удаляем только ушедшие далеко вниз
         obstacles.erase(std::remove_if(obstacles.begin(), obstacles.end(),
-            [](const RectangleShape& o) { 
-                bool shouldRemove = o.getPosition().y > 650.0f;
-                if (shouldRemove) {
-                    std::cout << "🗑️ Удалено препятствие" << std::endl;
-                }
-                return shouldRemove;
+            [](const Obstacle& o) { 
+                return o.position.y > 650.0f;
             }),
             obstacles.end());
     }
     
     void checkCollisions() {
-        FloatRect playerBounds = player.getGlobalBounds();
+        FloatRect playerBounds;
+        
+        if (playerSprite) {
+            playerBounds = playerSprite->getGlobalBounds();
+        } else {
+            playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
+        }
+        
+        if (isJumping || isFalling) {
+            for (const auto& obstacle : obstacles) {
+                FloatRect obstacleBounds(obstacle.position, obstacle.size);
+                if (obstacle.type == 1 && playerBounds.findIntersection(obstacleBounds).has_value()) {
+                    std::cout << "💥 СТОЛКНОВЕНИЕ С ГАРАЖОМ!" << std::endl;
+                    window.close();
+                    return;
+                }
+            }
+            return;
+        }
         
         for (const auto& obstacle : obstacles) {
-            if (playerBounds.findIntersection(obstacle.getGlobalBounds()).has_value()) {
-                std::cout << "💥 СТОЛКНОВЕНИЕ! Игра окончена." << std::endl;
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                std::cout << "💥 СТОЛКНОВЕНИЕ!" << std::endl;
                 window.close();
+                return;
             }
         }
     }
@@ -137,7 +183,7 @@ public:
                     updatePlayerPosition();
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::W || keyPressed->scancode == Keyboard::Scan::Space) {
-                    if (!isJumping) {
+                    if (!isJumping && !isFalling) {
                         isJumping = true;
                         jumpHeight = 0.0f;
                     }
@@ -146,13 +192,14 @@ public:
                     window.close();
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::R) {
-                    // Рестарт игры
                     obstacles.clear();
                     currentLane = 1;
                     isJumping = false;
+                    isFalling = false;
+                    jumpHeight = 0.0f;
                     updatePlayerPosition();
                     spawnClock.restart();
-                    std::cout << "🔄 РЕСТАРТ ИГРЫ!" << std::endl;
+                    std::cout << "🔄 РЕСТАРТ!" << std::endl;
                 }
             }
         }
@@ -161,7 +208,18 @@ public:
     void update(float deltaTime) {
         if (isJumping) {
             jumpHeight += jumpSpeed * deltaTime;
-            if (jumpHeight >= 100.0f) isJumping = false;
+            if (jumpHeight >= maxJumpHeight) {
+                isJumping = false;
+                isFalling = true;
+            }
+            updatePlayerPosition();
+        }
+        else if (isFalling) {
+            jumpHeight -= jumpSpeed * deltaTime;
+            if (jumpHeight <= 0.0f) {
+                isFalling = false;
+                jumpHeight = 0.0f;
+            }
             updatePlayerPosition();
         }
         
@@ -173,21 +231,69 @@ public:
     void render() {
         window.clear(Color(100, 100, 100));
         
-        // Отрисовка полос
+        // Статическая текстура дороги
+        static Texture roadTexture;
+        static bool textureLoaded = roadTexture.loadFromFile("spryte/road.png");
+        static Vector2u originalRoadSize = textureLoaded ? roadTexture.getSize() : Vector2u{338, 333};
+        
+        // Уменьшаем размер спрайта дороги
+        static float scaleFactor = 0.25f;
+        static Vector2f roadSpriteSize = {
+            originalRoadSize.x * scaleFactor,
+            originalRoadSize.y * scaleFactor
+        };
+        
+        // Отрисовка 3 узких полос с повторяющимися спрайтами дороги
         for (int i = 0; i < 3; ++i) {
-            RectangleShape lane({laneWidth - 2.0f, 600.0f});
-            lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
-            lane.setFillColor(i == currentLane ? Color(150, 150, 150) : Color(120, 120, 120));
-            window.draw(lane);
+            if (textureLoaded) {
+                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 1;
+                
+                for (int j = 0; j < tilesNeeded; ++j) {
+                    Sprite roadSprite(roadTexture);
+                    float posX = lanePositions[i] + 1.0f;
+                    float posY = static_cast<float>(j) * roadSpriteSize.y;
+                    roadSprite.setPosition({posX, posY});
+                    float scaleX = (laneWidth - 2.0f) / originalRoadSize.x;
+                    roadSprite.setScale({scaleX, scaleFactor});
+                    window.draw(roadSprite);
+                }
+            } else {
+                RectangleShape lane({laneWidth - 2.0f, 600.0f});
+                lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
+                lane.setFillColor(i == currentLane ? Color(150, 150, 150) : Color(120, 120, 120));
+                window.draw(lane);
+            }
         }
         
         // Отрисовка препятствий
         for (const auto& obstacle : obstacles) {
-            window.draw(obstacle);
+            if (obstacle.type == 0 && benchTexture.getSize().x > 0) {
+                // ЛАВКА - спрайт
+                Sprite benchSprite(benchTexture);
+                Vector2u texSize = benchTexture.getSize();
+                float scaleX = obstacle.size.x / texSize.x;
+                float scaleY = obstacle.size.y / texSize.y;
+                benchSprite.setScale({scaleX, scaleY});
+                benchSprite.setPosition(obstacle.position);
+                window.draw(benchSprite);
+            } else {
+                // ГАРАЖ - красный квадрат
+                RectangleShape garageShape(obstacle.size);
+                garageShape.setFillColor(Color::Red);
+                garageShape.setPosition(obstacle.position);
+                window.draw(garageShape);
+            }
         }
         
         // Отрисовка игрока
-        window.draw(player);
+        if (playerSprite) {
+            window.draw(*playerSprite);
+        } else {
+            RectangleShape playerShape({50.0f, 50.0f});
+            playerShape.setFillColor(Color::Blue);
+            playerShape.setPosition({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight});
+            window.draw(playerShape);
+        }
         
         window.display();
     }
@@ -195,8 +301,9 @@ public:
     void run() {
         Clock clock;
         
-        std::cout << "🎮 Игра началась! Управление:" << std::endl;
-        std::cout << "A/← - влево, D/→ - вправо, W/ПРОБЕЛ - прыжок" << std::endl;
+        std::cout << "=== RUSSIA RUNNER ===" << std::endl;
+        std::cout << "🎮 Игра началась!" << std::endl;
+        std::cout << "Управление: A/D ←→ - движение, W/ПРОБЕЛ - прыжок" << std::endl;
         std::cout << "R - рестарт, ESC - выход" << std::endl;
         
         while (window.isOpen()) {
@@ -209,11 +316,8 @@ public:
 };
 
 int main() {
-    std::cout << "=== ИГРА - 3 ПОЛОСЫ ===" << std::endl;
-    
     SimpleGame game;
     game.run();
-    
     std::cout << "Игра завершена" << std::endl;
     return 0;
 }
