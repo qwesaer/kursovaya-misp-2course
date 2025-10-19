@@ -15,6 +15,7 @@ private:
     Texture playerTexture;
     Texture benchTexture;
     Texture garageTexture;
+    Texture roadTexture;
     Sprite* playerSprite = nullptr;
     
     // Анимация персонажа
@@ -22,7 +23,10 @@ private:
     int currentFrame = 0;
     float animationTimer = 0.0f;
     float frameTime = 0.1f;
-    bool isMoving = false;
+    
+    // Дорога
+    float roadOffset = 0.0f;
+    float roadSpeed = 300.0f;
     
     // Игрок
     int currentLane = 1;
@@ -115,6 +119,13 @@ public:
             }
         }
         
+        // Загружаем текстуру дороги
+        if (!roadTexture.loadFromFile("spryte/road.png")) {
+            std::cout << "❌ Не удалось загрузить spryte/road.png" << std::endl;
+        } else {
+            std::cout << "✅ Загружена текстура дороги" << std::endl;
+        }
+        
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {
             std::cout << "❌ Не удалось загрузить spryte/beanch.png" << std::endl;
         } else {
@@ -146,11 +157,9 @@ public:
             playerSprite = new Sprite(garageTexture);
             std::cout << "⚠️ Использована текстура гаража для персонажа" << std::endl;
         } else {
-            // Просто используем первую доступную текстуру из анимации
             if (!runTextures.empty()) {
                 playerSprite = new Sprite(runTextures[0]);
             } else {
-                // Если совсем нет текстур, пропускаем создание спрайта
                 playerSprite = nullptr;
                 std::cout << "❌ Не удалось создать спрайт персонажа" << std::endl;
             }
@@ -403,6 +412,7 @@ public:
         jumpHeight = 0.0f;
         score = 0;
         scoreClock.restart();
+        roadOffset = 0.0f;
         
         currentFrame = 0;
         animationTimer = 0.0f;
@@ -422,15 +432,20 @@ public:
     }
     
     void update(float deltaTime) {
-        // АНИМАЦИЯ ВСЕГДА РАБОТАЕТ - УБРАЛ ПРОВЕРКУ isMoving
+        // АНИМАЦИЯ ПЕРСОНАЖА
         if (!runTextures.empty() && playerSprite) {
             animationTimer += deltaTime;
             if (animationTimer >= frameTime) {
                 currentFrame = (currentFrame + 1) % runTextures.size();
                 playerSprite->setTexture(runTextures[currentFrame]);
                 animationTimer = 0.0f;
-                std::cout << "🎬 Кадр анимации: " << currentFrame + 1 << "/" << runTextures.size() << std::endl;
             }
+        }
+        
+        // ДВИЖЕНИЕ ДОРОГИ
+        roadOffset += roadSpeed * deltaTime;
+        if (roadOffset >= roadTexture.getSize().y * 0.25f) {
+            roadOffset = 0.0f;
         }
         
         if (isJumping) {
@@ -469,25 +484,27 @@ public:
     void renderGame() {
         window.clear(Color(100, 100, 100));
         
-        static Texture roadTexture;
-        static bool textureLoaded = roadTexture.loadFromFile("spryte/road.png");
-        static Vector2u originalRoadSize = textureLoaded ? roadTexture.getSize() : Vector2u{338, 333};
-        static float scaleFactor = 0.25f;
-        static Vector2f roadSpriteSize = {originalRoadSize.x * scaleFactor, originalRoadSize.y * scaleFactor};
-        
-        for (int i = 0; i < 3; ++i) {
-            if (textureLoaded) {
-                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 1;
-                for (int j = 0; j < tilesNeeded; ++j) {
+        // ОТРИСОВКА ДВИЖУЩЕЙСЯ ДОРОГИ
+        if (roadTexture.getSize().x > 0) {
+            Vector2u originalRoadSize = roadTexture.getSize();
+            float scaleFactor = 0.25f;
+            Vector2f roadSpriteSize = {originalRoadSize.x * scaleFactor, originalRoadSize.y * scaleFactor};
+            
+            for (int i = 0; i < 3; ++i) {
+                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 2; // +2 для перекрытия
+                for (int j = -1; j < tilesNeeded; ++j) {
                     Sprite roadSprite(roadTexture);
                     float posX = lanePositions[i] + 1.0f;
-                    float posY = static_cast<float>(j) * roadSpriteSize.y;
+                    float posY = static_cast<float>(j) * roadSpriteSize.y + roadOffset;
                     roadSprite.setPosition({posX, posY});
                     float scaleX = (laneWidth - 2.0f) / originalRoadSize.x;
                     roadSprite.setScale({scaleX, scaleFactor});
                     window.draw(roadSprite);
                 }
-            } else {
+            }
+        } else {
+            // Запасной вариант без текстуры дороги
+            for (int i = 0; i < 3; ++i) {
                 RectangleShape lane({laneWidth - 2.0f, 600.0f});
                 lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
                 lane.setFillColor(i == currentLane ? Color(150, 150, 150) : Color(120, 120, 120));
