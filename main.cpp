@@ -14,6 +14,7 @@ private:
     // Текстуры и спрайты
     Texture playerTexture;
     Texture benchTexture;
+    Texture garageTexture;
     Sprite* playerSprite = nullptr;
     
     // Игрок
@@ -49,12 +50,20 @@ public:
         if (playerSprite) delete playerSprite;
     }
     
-    void setup() {
+void setup() {
     // Загружаем текстуру лавки из папки spryte
     if (!benchTexture.loadFromFile("spryte/beanch.png")) {
         std::cout << "❌ Не удалось загрузить spryte/beanch.png" << std::endl;
     } else {
         std::cout << "✅ Загружен спрайт лавки" << std::endl;
+    }
+    
+    // Загружаем текстуру гаража из папки spryte
+    if (!garageTexture.loadFromFile("spryte/garage.png")) {
+        std::cout << "❌ Не удалось загрузить spryte/garage.png" << std::endl;
+    } else {
+        std::cout << "✅ Загружен спрайт гаража" << std::endl;
+        std::cout << "📏 Размер текстуры гаража: " << garageTexture.getSize().x << "x" << garageTexture.getSize().y << std::endl;
     }
     
     // Настройка полос - узкие, по центру
@@ -229,74 +238,91 @@ public:
     }
     
     void render() {
-        window.clear(Color(100, 100, 100));
-        
-        // Статическая текстура дороги
-        static Texture roadTexture;
-        static bool textureLoaded = roadTexture.loadFromFile("spryte/road.png");
-        static Vector2u originalRoadSize = textureLoaded ? roadTexture.getSize() : Vector2u{338, 333};
-        
-        // Уменьшаем размер спрайта дороги
-        static float scaleFactor = 0.25f;
-        static Vector2f roadSpriteSize = {
-            originalRoadSize.x * scaleFactor,
-            originalRoadSize.y * scaleFactor
-        };
-        
-        // Отрисовка 3 узких полос с повторяющимися спрайтами дороги
-        for (int i = 0; i < 3; ++i) {
-            if (textureLoaded) {
-                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 1;
+    window.clear(Color(100, 100, 100));
+    
+    // Статическая текстура дороги из папки spryte
+    static Texture roadTexture;
+    static bool textureLoaded = roadTexture.loadFromFile("spryte/road.png");
+    static Vector2u originalRoadSize = textureLoaded ? roadTexture.getSize() : Vector2u{338, 333};
+    
+    // Уменьшаем размер спрайта дороги
+    static float scaleFactor = 0.25f;
+    static Vector2f roadSpriteSize = {
+        originalRoadSize.x * scaleFactor,
+        originalRoadSize.y * scaleFactor
+    };
+    
+    // Отрисовка 3 узких полос с повторяющимися спрайтами дороги
+    for (int i = 0; i < 3; ++i) {
+        if (textureLoaded) {
+            // Рассчитываем сколько спрайтов нужно для заполнения полосы
+            int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 1;
+            
+            for (int j = 0; j < tilesNeeded; ++j) {
+                Sprite roadSprite(roadTexture);
                 
-                for (int j = 0; j < tilesNeeded; ++j) {
-                    Sprite roadSprite(roadTexture);
-                    float posX = lanePositions[i] + 1.0f;
-                    float posY = static_cast<float>(j) * roadSpriteSize.y;
-                    roadSprite.setPosition({posX, posY});
-                    float scaleX = (laneWidth - 2.0f) / originalRoadSize.x;
-                    roadSprite.setScale({scaleX, scaleFactor});
-                    window.draw(roadSprite);
-                }
-            } else {
-                RectangleShape lane({laneWidth - 2.0f, 600.0f});
-                lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
-                lane.setFillColor(i == currentLane ? Color(150, 150, 150) : Color(120, 120, 120));
-                window.draw(lane);
+                // Позиция спрайта
+                float posX = lanePositions[i] + 1.0f;
+                float posY = static_cast<float>(j) * roadSpriteSize.y;
+                roadSprite.setPosition({posX, posY});
+                
+                // Масштабируем по ширине узкой полосы
+                float scaleX = (laneWidth - 2.0f) / originalRoadSize.x;
+                roadSprite.setScale({scaleX, scaleFactor});
+                
+                window.draw(roadSprite);
             }
-        }
-        
-        // Отрисовка препятствий
-        for (const auto& obstacle : obstacles) {
-            if (obstacle.type == 0 && benchTexture.getSize().x > 0) {
-                // ЛАВКА - спрайт
-                Sprite benchSprite(benchTexture);
-                Vector2u texSize = benchTexture.getSize();
-                float scaleX = obstacle.size.x / texSize.x;
-                float scaleY = obstacle.size.y / texSize.y;
-                benchSprite.setScale({scaleX, scaleY});
-                benchSprite.setPosition(obstacle.position);
-                window.draw(benchSprite);
-            } else {
-                // ГАРАЖ - красный квадрат
-                RectangleShape garageShape(obstacle.size);
-                garageShape.setFillColor(Color::Red);
-                garageShape.setPosition(obstacle.position);
-                window.draw(garageShape);
-            }
-        }
-        
-        // Отрисовка игрока
-        if (playerSprite) {
-            window.draw(*playerSprite);
         } else {
-            RectangleShape playerShape({50.0f, 50.0f});
-            playerShape.setFillColor(Color::Blue);
-            playerShape.setPosition({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight});
-            window.draw(playerShape);
+            // Запасной вариант - цветные полосы
+            RectangleShape lane({laneWidth - 2.0f, 600.0f});
+            lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
+            lane.setFillColor(i == currentLane ? Color(150, 150, 150) : Color(120, 120, 120));
+            window.draw(lane);
         }
-        
-        window.display();
     }
+    
+    // Отрисовка препятствий
+    for (const auto& obstacle : obstacles) {
+        if (obstacle.type == 0 && benchTexture.getSize().x > 0) {
+            // ЛАВКА - спрайт
+            Sprite benchSprite(benchTexture);
+            Vector2u texSize = benchTexture.getSize();
+            float scaleX = obstacle.size.x / texSize.x;
+            float scaleY = obstacle.size.y / texSize.y;
+            benchSprite.setScale({scaleX, scaleY});
+            benchSprite.setPosition(obstacle.position);
+            window.draw(benchSprite);
+        } else if (obstacle.type == 1 && garageTexture.getSize().x > 0) {
+            // ГАРАЖ - спрайт
+            Sprite garageSprite(garageTexture);
+            Vector2u texSize = garageTexture.getSize();
+            float scaleX = obstacle.size.x / texSize.x;
+            float scaleY = obstacle.size.y / texSize.y;
+            garageSprite.setScale({scaleX, scaleY});
+            garageSprite.setPosition(obstacle.position);
+            window.draw(garageSprite);
+        } else {
+            // Запасной вариант - цветные квадраты
+            RectangleShape obstacleShape(obstacle.size);
+            obstacleShape.setFillColor(obstacle.type == 0 ? Color::Green : Color::Red);
+            obstacleShape.setPosition(obstacle.position);
+            window.draw(obstacleShape);
+        }
+    }
+    
+    // Отрисовка игрока
+    if (playerSprite) {
+        window.draw(*playerSprite);
+    } else {
+        RectangleShape playerShape({50.0f, 50.0f});
+        playerShape.setFillColor(Color::Blue);
+        Vector2f playerPos = {lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight};
+        playerShape.setPosition(playerPos);
+        window.draw(playerShape);
+    }
+    
+    window.display();
+}
     
     void run() {
         Clock clock;
