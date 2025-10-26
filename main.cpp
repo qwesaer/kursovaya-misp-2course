@@ -11,7 +11,7 @@ class RussiaRunner {
 private:
     RenderWindow window;
     
-    // Текстуры и спрайты
+    // Текстуры
     Texture playerTexture;
     Texture benchTexture;
     Texture garageTexture;
@@ -25,7 +25,7 @@ private:
     std::vector<Texture> mopedRideTextures;
     Sprite* playerSprite = nullptr;
     
-    // Анимация персонажа
+    // Анимация бега
     std::vector<Texture> runTextures;
     int currentFrame = 0;
     float animationTimer = 0.0f;
@@ -49,7 +49,7 @@ private:
     float jumpSpeed = 400.0f;
     float maxJumpHeight = 150.0f;
     
-    // Полосы
+    // Дорожные полосы
     float laneWidth;
     std::vector<float> lanePositions;
     
@@ -94,7 +94,7 @@ private:
     float mopedTimer = 0.0f;
     const float MOPED_DURATION = 20.0f;
     const int MAX_MOPEDS = 3;
-    float mopedCooldown = 0.0f; // НОВАЯ ПЕРЕМЕННАЯ - задержка после поломки мопеда
+    float mopedCooldown = 0.0f;
     
     // Счет
     int score = 0;
@@ -135,6 +135,7 @@ public:
             return;
         }
         
+        // Тексты меню
         titleText = new Text(font, "RUSSIA RUNNER", 50);
         titleText->setFillColor(Color::Red);
         titleText->setPosition({150.0f, 150.0f});
@@ -151,6 +152,7 @@ public:
         exitText->setFillColor(Color::White);
         exitText->setPosition({250.0f, 440.0f});
         
+        // Тексты игры
         scoreText = new Text(font, "Score: 0", 30);
         scoreText->setFillColor(Color::White);
         scoreText->setPosition({10.0f, 10.0f});
@@ -159,7 +161,7 @@ public:
         boostTimerText->setFillColor(Color::Yellow);
         boostTimerText->setPosition({10.0f, 50.0f});
         
-        // Загружаем текстуры анимации
+        // Загрузка текстур анимации бега
         for (int i = 1; i <= 4; ++i) {
             Texture texture;
             std::string filename = "spryte/run" + std::to_string(i) + ".png";
@@ -169,7 +171,7 @@ public:
             }
         }
         
-        // Загружаем текстуры бустов
+        // Загрузка текстур объектов
         if (!roadTexture.loadFromFile("spryte/road.png")) {}
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {}
         if (!garageTexture.loadFromFile("spryte/garage.png")) {}
@@ -179,7 +181,7 @@ public:
         if (!seedsTexture.loadFromFile("spryte/seeds.png")) {}
         if (!macasinTexture.loadFromFile("spryte/macasin.png")) {}
         
-        // Загружаем текстуры мопеда
+        // Загрузка текстур мопеда
         if (!mopedItemTexture.loadFromFile("spryte/moped_item.png")) {}
         
         for (int i = 1; i <= 4; ++i) {
@@ -191,12 +193,13 @@ public:
             }
         }
         
+        // Инициализация дорожных полос
         float totalWidth = window.getSize().x;
         laneWidth = totalWidth / 4.0f;
         float offset = (totalWidth - (laneWidth * 3)) / 2.0f;
         lanePositions = {offset, offset + laneWidth, offset + laneWidth * 2};
         
-        // Создаем спрайт игрока
+        // Создание спрайта игрока
         if (!runTextures.empty()) {
             playerSprite = new Sprite(runTextures[0]);
         } else if (playerTexture.loadFromFile("spryte/player.png")) {
@@ -212,6 +215,7 @@ public:
         updatePlayerPosition();
     }
     
+    // Обработка ввода в меню
     void handleMenuInput() {
         for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
             if (event->is<Event::Closed>()) {
@@ -250,6 +254,7 @@ public:
         }
     }
     
+    // Обработка ввода в управлении
     void handleControlsInput() {
         for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
             if (event->is<Event::Closed>()) {
@@ -274,6 +279,7 @@ public:
         }
     }
     
+    // Отрисовка меню
     void renderMenu() {
         window.clear(Color(30, 30, 30));
         window.draw(*titleText);
@@ -283,6 +289,7 @@ public:
         window.display();
     }
     
+    // Отрисовка управления
     void renderControls() {
         window.clear(Color(30, 30, 50));
         
@@ -345,6 +352,7 @@ public:
         window.display();
     }
     
+    // Обновление позиции игрока
     void updatePlayerPosition() {
         float x = lanePositions[currentLane] + laneWidth/2 - 25;
         float y = 500.0f - jumpHeight;
@@ -353,6 +361,7 @@ public:
         }
     }
     
+    // Создание препятствий
     void spawnObstacle() {
         if (spawnClock.getElapsedTime().asSeconds() > 0.8f) {
             Obstacle obstacle;
@@ -373,6 +382,7 @@ public:
         }
     }
     
+    // Создание бустов
     void spawnBoost() {
         if (boostSpawnClock.getElapsedTime().asSeconds() > 5.0f && boosts.size() < 3) {
             Boost boost;
@@ -389,6 +399,7 @@ public:
         }
     }
     
+    // Обновление препятствий
     void updateObstacles(float deltaTime) {
         if (firstFrame) {
             firstFrame = false;
@@ -408,6 +419,7 @@ public:
             obstacles.end());
     }
     
+    // Обновление бустов
     void updateBoosts(float deltaTime) {
         for (auto& boost : boosts) {
             if (boost.active) {
@@ -422,6 +434,7 @@ public:
             boosts.end());
     }
     
+    // Применение эффектов бустов
     void applyBoostEffect(int boostType) {
         switch (boostType) {
             case BEER:
@@ -458,109 +471,102 @@ public:
         }
     }
     
+    // Проверка столкновений
     void checkCollisions() {
-    FloatRect playerBounds;
-    
-    if (playerSprite) {
-        playerBounds = playerSprite->getGlobalBounds();
-    } else {
-        playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
-    }
-    
-    // Проверка столкновений с бустами (всегда работает)
-    for (auto& boost : boosts) {
-        if (boost.active) {
-            FloatRect boostBounds(boost.position, boost.size);
-            if (playerBounds.findIntersection(boostBounds).has_value()) {
-                applyBoostEffect(boost.type);
-                boost.active = false;
-            }
+        FloatRect playerBounds;
+        
+        if (playerSprite) {
+            playerBounds = playerSprite->getGlobalBounds();
+        } else {
+            playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
         }
-    }
-    
-    // ЕСЛИ АКТИВЕН МОПЕД - проверяем только для слома мопеда
-    if (isMopedActive) {
-        bool collisionHappened = false;
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
-                // Столкновение! Мопед ломается, но игра НЕ заканчивается
-                collisionHappened = true;
-                break;
+        
+        // Столкновения с бустами
+        for (auto& boost : boosts) {
+            if (boost.active) {
+                FloatRect boostBounds(boost.position, boost.size);
+                if (playerBounds.findIntersection(boostBounds).has_value()) {
+                    applyBoostEffect(boost.type);
+                    boost.active = false;
+                }
             }
         }
         
-        if (collisionHappened) {
-            // Мопед сломался, устанавливаем задержку
-            isMopedActive = false;
-            mopedTimer = 0.0f;
-            mopedCooldown = 1.0f; // 1 секунда задержки
-            // Возвращаем обычную анимацию персонажа
-            if (!runTextures.empty() && playerSprite) {
-                playerSprite->setTexture(runTextures[currentFrame]);
+        // Мопед активен - проверка на поломку
+        if (isMopedActive) {
+            bool collisionHappened = false;
+            for (const auto& obstacle : obstacles) {
+                FloatRect obstacleBounds(obstacle.position, obstacle.size);
+                if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                    collisionHappened = true;
+                    break;
+                }
             }
+            
+            if (collisionHappened) {
+                isMopedActive = false;
+                mopedTimer = 0.0f;
+                mopedCooldown = 1.0f;
+                if (!runTextures.empty() && playerSprite) {
+                    playerSprite->setTexture(runTextures[currentFrame]);
+                }
+            }
+            return;
         }
-        // Выходим из функции - при активном мопеде игра не заканчивается
-        return;
-    }
-    
-    // ЕСЛИ ЕСТЬ ЗАДЕРЖКА ПОСЛЕ ПОЛОМКИ МОПЕДА - игнорируем столкновения
-    if (mopedCooldown > 0.0f) {
-        return; // Игнорируем столкновения во время задержки
-    }
-    
-    // ДАЛЕЕ ПРОВЕРЯЕМ ТОЛЬКО ЕСЛИ МОПЕД НЕ АКТИВЕН И НЕТ ЗАДЕРЖКИ
-    
-    // ЕСЛИ АКТИВЕН МАКАСИН - МОЖНО ПЕРЕПРЫГИВАТЬ ГАРАЖИ В ПРЫЖКЕ
-    if (hasMacasinBoost) {
-        // Во время прыжка можно перепрыгнуть ВСЕ препятствия
+        
+        // Задержка после поломки мопеда
+        if (mopedCooldown > 0.0f) {
+            return;
+        }
+        
+        // Макасин активен - логика прыжков
+        if (hasMacasinBoost) {
+            if (isJumping || isFalling) {
+                return;
+            }
+            for (const auto& obstacle : obstacles) {
+                FloatRect obstacleBounds(obstacle.position, obstacle.size);
+                if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                    currentState = GAME_OVER;
+                    return;
+                }
+            }
+            return;
+        }
+        
+        // Обычная логика столкновений
         if (isJumping || isFalling) {
-            return; // Может перепрыгнуть что угодно
-        }
-        // Но на земле уязвим для ВСЕХ препятствий
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
-                currentState = GAME_OVER;
-                return;
+            for (const auto& obstacle : obstacles) {
+                FloatRect obstacleBounds(obstacle.position, obstacle.size);
+                if (obstacle.type == 1 && playerBounds.findIntersection(obstacleBounds).has_value()) {
+                    currentState = GAME_OVER;
+                    return;
+                }
             }
-        }
-        return;
-    }
-    
-    // ОБЫЧНАЯ ЛОГИКА (БЕЗ БУСТОВ)
-    if (isJumping || isFalling) {
-        // В прыжке можно перепрыгнуть только лавки (type 0)
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            if (obstacle.type == 1 && playerBounds.findIntersection(obstacleBounds).has_value()) {
-                // Столкновение с гаражом (type 1) в прыжке - смерть
-                currentState = GAME_OVER;
-                return;
-            }
-        }
-    } else {
-        // На земле умираем от любого препятствия
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
-                currentState = GAME_OVER;
-                return;
+        } else {
+            for (const auto& obstacle : obstacles) {
+                FloatRect obstacleBounds(obstacle.position, obstacle.size);
+                if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                    currentState = GAME_OVER;
+                    return;
+                }
             }
         }
     }
-}
     
+    // Обновление таймеров бустов
     void updateBoostTimers(float deltaTime) {
         std::string boostText = "";
-            // Обновление задержки после поломки мопеда
+        
+        // Задержка мопеда
         if (mopedCooldown > 0.0f) {
             mopedCooldown -= deltaTime;
             if (mopedCooldown < 0.0f) {
                 mopedCooldown = 0.0f;
             }
         }
-        // Обновление энергетика
+        
+        // Энергетик
         if (hasEnergyBoost) {
             energyTimer -= deltaTime;
             int secondsLeft = static_cast<int>(energyTimer) + 1;
@@ -573,7 +579,7 @@ public:
             }
         }
         
-        // Обновление семечек
+        // Семечки
         if (hasSeedsBoost) {
             seedsTimer -= deltaTime;
             int secondsLeft = static_cast<int>(seedsTimer) + 1;
@@ -585,7 +591,7 @@ public:
             }
         }
         
-        // Обновление макасина
+        // Макасин
         if (hasMacasinBoost) {
             macasinTimer -= deltaTime;
             int secondsLeft = static_cast<int>(macasinTimer) + 1;
@@ -596,7 +602,7 @@ public:
             }
         }
         
-        // Обновление мопеда
+        // Мопед
         if (isMopedActive) {
             mopedTimer -= deltaTime;
             int secondsLeft = static_cast<int>(mopedTimer) + 1;
@@ -607,7 +613,7 @@ public:
             }
         }
         
-        // Показываем количество мопедов в инвентаре
+        // Инвентарь мопедов
         if (mopedCount > 0) {
             boostText += "MOPEDx" + std::to_string(mopedCount) + " [Q] ";
         }
@@ -617,6 +623,7 @@ public:
         }
     }
     
+    // Обработка ввода в игре
     void handleGameInput() {
         for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
             if (event->is<Event::Closed>()) {
@@ -644,7 +651,6 @@ public:
                     }
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::Q && mopedCount > 0 && !isMopedActive) {
-                    // Активируем мопед (используем один из инвентаря)
                     isMopedActive = true;
                     mopedTimer = MOPED_DURATION;
                     mopedCount--;
@@ -661,7 +667,8 @@ public:
         }
     }
     
-        void resetGame() {
+    // Сброс игры
+    void resetGame() {
         obstacles.clear();
         boosts.clear();
         currentLane = 1;
@@ -685,7 +692,7 @@ public:
         mopedCount = 1;
         isMopedActive = false;
         mopedTimer = 0.0f;
-        mopedCooldown = 0.0f; // СБРАСЫВАЕМ ЗАДЕРЖКУ
+        mopedCooldown = 0.0f;
         mopedRideFrame = 0;
         mopedRideAnimationTimer = 0.0f;
         
@@ -693,16 +700,16 @@ public:
         animationTimer = 0.0f;
         
         if (!runTextures.empty() && playerSprite) {
-        playerSprite->setTexture(runTextures[0]);
-    }
+            playerSprite->setTexture(runTextures[0]);
+        }
         
         if (scoreText) {
-        scoreText->setString("Score: 0");
-    }
+            scoreText->setString("Score: 0");
+        }
         
         if (boostTimerText) {
-        boostTimerText->setString("");
-    }
+            boostTimerText->setString("");
+        }
         
         updatePlayerPosition();
         spawnClock.restart();
@@ -710,8 +717,9 @@ public:
         firstFrame = true;
     }
     
+    // Основное обновление игры
     void update(float deltaTime) {
-        // АНИМАЦИЯ ПЕРСОНАЖА
+        // Анимация бега
         if (!runTextures.empty() && playerSprite) {
             animationTimer += deltaTime;
             if (animationTimer >= frameTime) {
@@ -723,7 +731,7 @@ public:
             }
         }
         
-        // АНИМАЦИЯ ЕЗДЫ НА МОПЕДЕ
+        // Анимация мопеда
         if (isMopedActive && !mopedRideTextures.empty()) {
             mopedRideAnimationTimer += deltaTime;
             if (mopedRideAnimationTimer >= mopedRideFrameTime) {
@@ -733,12 +741,13 @@ public:
             }
         }
         
-        // ДВИЖЕНИЕ ДОРОГИ
+        // Движение дороги
         roadOffset += roadSpeed * deltaTime;
         if (roadOffset >= roadTexture.getSize().y * 0.25f) {
             roadOffset = 0.0f;
         }
         
+        // Прыжок
         if (isJumping) {
             jumpHeight += jumpSpeed * deltaTime;
             if (jumpHeight >= maxJumpHeight) {
@@ -756,7 +765,7 @@ public:
             updatePlayerPosition();
         }
         
-        // ОБНОВЛЕНИЕ СЧЕТА
+        // Обновление счета
         if (scoreClock.getElapsedTime().asSeconds() >= 1.0f) {
             score += 10 * scoreMultiplier;
             scoreClock.restart();
@@ -774,10 +783,11 @@ public:
         checkCollisions();
     }
     
+    // Отрисовка игры
     void renderGame() {
         window.clear(Color(100, 100, 100));
         
-        // ОТРИСОВКА ДВИЖУЩЕЙСЯ ДОРОГИ
+        // Отрисовка дороги
         if (roadTexture.getSize().x > 0) {
             Vector2u originalRoadSize = roadTexture.getSize();
             float scaleFactor = 0.25f;
@@ -889,9 +899,8 @@ public:
         }
         
         if (playerSprite) {
-            // Визуальные эффекты для активных бустов
+            // Визуальные эффекты бустов
             if (isMopedActive) {
-                // Мерцание для мопеда
                 if (static_cast<int>(mopedTimer * 10) % 2 == 0) {
                     playerSprite->setColor(Color(100, 100, 255, 200));
                 } else {
@@ -928,6 +937,7 @@ public:
         window.display();
     }
     
+    // Отрисовка Game Over
     void renderGameOver() {
         window.clear(Color(30, 0, 0));
         
@@ -955,6 +965,7 @@ public:
         window.display();
     }
     
+    // Главный цикл игры
     void run() {
         Clock clock;
         
