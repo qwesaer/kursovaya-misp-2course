@@ -21,6 +21,8 @@ private:
     Texture energyTexture;
     Texture seedsTexture;
     Texture macasinTexture;
+    Texture mopedItemTexture;
+    std::vector<Texture> mopedRideTextures;
     Sprite* playerSprite = nullptr;
     
     // Анимация персонажа
@@ -28,6 +30,11 @@ private:
     int currentFrame = 0;
     float animationTimer = 0.0f;
     float frameTime = 0.1f;
+    
+    // Анимация мопеда
+    int mopedRideFrame = 0;
+    float mopedRideAnimationTimer = 0.0f;
+    float mopedRideFrameTime = 0.1f;
     
     // Дорога
     float roadOffset = 0.0f;
@@ -58,7 +65,7 @@ private:
     bool firstFrame = true;
     
     // Бусты
-    enum BoostType { BEER, RUBLE, ENERGY, SEEDS, MACASIN };
+    enum BoostType { BEER, RUBLE, ENERGY, SEEDS, MACASIN, MOPED };
     struct Boost {
         int type;
         Vector2f position;
@@ -80,6 +87,14 @@ private:
     bool hasMacasinBoost = false;
     float macasinTimer = 0.0f;
     const float MACASIN_DURATION = 15.0f;
+    
+    // Мопед
+    int mopedCount = 1;
+    bool isMopedActive = false;
+    float mopedTimer = 0.0f;
+    const float MOPED_DURATION = 20.0f;
+    const int MAX_MOPEDS = 3;
+    float mopedCooldown = 0.0f; // НОВАЯ ПЕРЕМЕННАЯ - задержка после поломки мопеда
     
     // Счет
     int score = 0;
@@ -154,7 +169,7 @@ public:
             }
         }
         
-        // Загружаем текстуры
+        // Загружаем текстуры бустов
         if (!roadTexture.loadFromFile("spryte/road.png")) {}
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {}
         if (!garageTexture.loadFromFile("spryte/garage.png")) {}
@@ -163,6 +178,18 @@ public:
         if (!energyTexture.loadFromFile("spryte/energy.png")) {}
         if (!seedsTexture.loadFromFile("spryte/seeds.png")) {}
         if (!macasinTexture.loadFromFile("spryte/macasin.png")) {}
+        
+        // Загружаем текстуры мопеда
+        if (!mopedItemTexture.loadFromFile("spryte/moped_item.png")) {}
+        
+        for (int i = 1; i <= 4; ++i) {
+            Texture texture;
+            std::string filename = "spryte/moped_ride" + std::to_string(i) + ".png";
+            if (!texture.loadFromFile(filename)) {
+            } else {
+                mopedRideTextures.push_back(texture);
+            }
+        }
         
         float totalWidth = window.getSize().x;
         laneWidth = totalWidth / 4.0f;
@@ -257,56 +284,66 @@ public:
     }
     
     void renderControls() {
-    window.clear(Color(30, 30, 50));
-    
-    Text controlsTitle(font, "BOOSTS", 50);
-    controlsTitle.setFillColor(Color::Yellow);
-    controlsTitle.setPosition({220.0f, 60.0f});
-    
-    Text beerText(font, "BEER +100 points", 25);
-    beerText.setFillColor(Color(255, 200, 0));
-    beerText.setPosition({150.0f, 140.0f});
-    
-    Text rubleText(font, "RUBLE +50 points", 25);
-    rubleText.setFillColor(Color::Green);
-    rubleText.setPosition({150.0f, 180.0f});
-    
-    Text energyText(font, "ENERGY +20% speed (15s)", 25);
-    energyText.setFillColor(Color::Red);
-    energyText.setPosition({150.0f, 220.0f});
-    
-    Text seedsText(font, "SEEDS 2x points (15s)", 25);
-    seedsText.setFillColor(Color::Cyan);
-    seedsText.setPosition({150.0f, 260.0f});
-    
-    Text macasinText(font, "MACASIN jump over GARAGES (15s)", 25);
-    macasinText.setFillColor(Color::Magenta);
-    macasinText.setPosition({150.0f, 300.0f});
-    
-    Text menuText(font, "ESC - Back to Menu", 30);
-    menuText.setFillColor(Color::White);
-    menuText.setPosition({150.0f, 350.0f});
-    
-    Text restartText(font, "R - Restart (in game)", 30);
-    restartText.setFillColor(Color::White);
-    restartText.setPosition({150.0f, 400.0f});
-    
-    backText = new Text(font, "BACK (ESC)", 35);
-    backText->setFillColor(Color::Green);
-    backText->setPosition({220.0f, 470.0f});
-    
-    window.draw(controlsTitle);
-    window.draw(beerText);
-    window.draw(rubleText);
-    window.draw(energyText);
-    window.draw(seedsText);
-    window.draw(macasinText);
-    window.draw(menuText);
-    window.draw(restartText);
-    window.draw(*backText);
-    
-    window.display();
-}
+        window.clear(Color(30, 30, 50));
+        
+        Text controlsTitle(font, "BOOSTS", 50);
+        controlsTitle.setFillColor(Color::Yellow);
+        controlsTitle.setPosition({220.0f, 60.0f});
+        
+        Text beerText(font, "BEER +100 points", 25);
+        beerText.setFillColor(Color(255, 200, 0));
+        beerText.setPosition({150.0f, 140.0f});
+        
+        Text rubleText(font, "RUBLE +50 points", 25);
+        rubleText.setFillColor(Color::Green);
+        rubleText.setPosition({150.0f, 180.0f});
+        
+        Text energyText(font, "ENERGY +20% speed (15s)", 25);
+        energyText.setFillColor(Color::Red);
+        energyText.setPosition({150.0f, 220.0f});
+        
+        Text seedsText(font, "SEEDS 2x points (15s)", 25);
+        seedsText.setFillColor(Color::Cyan);
+        seedsText.setPosition({150.0f, 260.0f});
+        
+        Text macasinText(font, "MACASIN jump over GARAGES (15s)", 25);
+        macasinText.setFillColor(Color::Magenta);
+        macasinText.setPosition({150.0f, 300.0f});
+        
+        Text mopedText(font, "MOPED [Q] - invincibility (20s or 1 hit)", 25);
+        mopedText.setFillColor(Color(150, 150, 150));
+        mopedText.setPosition({150.0f, 340.0f});
+        
+        Text mopedStackText(font, "Can stack up to 3 mopeds", 20);
+        mopedStackText.setFillColor(Color(150, 150, 150));
+        mopedStackText.setPosition({150.0f, 370.0f});
+        
+        Text menuText(font, "ESC - Back to Menu", 30);
+        menuText.setFillColor(Color::White);
+        menuText.setPosition({150.0f, 410.0f});
+        
+        Text restartText(font, "R - Restart (in game)", 30);
+        restartText.setFillColor(Color::White);
+        restartText.setPosition({150.0f, 460.0f});
+        
+        backText = new Text(font, "BACK (ESC)", 35);
+        backText->setFillColor(Color::Green);
+        backText->setPosition({220.0f, 520.0f});
+        
+        window.draw(controlsTitle);
+        window.draw(beerText);
+        window.draw(rubleText);
+        window.draw(energyText);
+        window.draw(seedsText);
+        window.draw(macasinText);
+        window.draw(mopedText);
+        window.draw(mopedStackText);
+        window.draw(menuText);
+        window.draw(restartText);
+        window.draw(*backText);
+        
+        window.display();
+    }
     
     void updatePlayerPosition() {
         float x = lanePositions[currentLane] + laneWidth/2 - 25;
@@ -317,7 +354,7 @@ public:
     }
     
     void spawnObstacle() {
-        if (spawnClock.getElapsedTime().asSeconds() > 0.5f) {
+        if (spawnClock.getElapsedTime().asSeconds() > 0.8f) {
             Obstacle obstacle;
             obstacle.type = std::rand() % 2;
             
@@ -339,7 +376,7 @@ public:
     void spawnBoost() {
         if (boostSpawnClock.getElapsedTime().asSeconds() > 5.0f && boosts.size() < 3) {
             Boost boost;
-            boost.type = std::rand() % 5; // 0-4: пиво, рубль, энергетик, семечки, макасин
+            boost.type = std::rand() % 6;
             boost.size = Vector2f{40.0f, 40.0f};
             boost.active = true;
             
@@ -412,55 +449,117 @@ public:
                 hasMacasinBoost = true;
                 macasinTimer = MACASIN_DURATION;
                 break;
+                
+            case MOPED:
+                if (mopedCount < MAX_MOPEDS) {
+                    mopedCount++;
+                }
+                break;
         }
     }
     
     void checkCollisions() {
-        FloatRect playerBounds;
-        
-        if (playerSprite) {
-            playerBounds = playerSprite->getGlobalBounds();
-        } else {
-            playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
-        }
-        
-        // Проверка столкновений с бустами
-        for (auto& boost : boosts) {
-            if (boost.active) {
-                FloatRect boostBounds(boost.position, boost.size);
-                if (playerBounds.findIntersection(boostBounds).has_value()) {
-                    applyBoostEffect(boost.type);
-                    boost.active = false;
-                }
-            }
-        }
-        
-        // Проверка столкновений с препятствиями
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            
-            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
-                // Если игрок в прыжке
-                if (isJumping || isFalling) {
-                    // БЕЗ макасина: можно перепрыгнуть только лавки (type 0)
-                    if (!hasMacasinBoost && obstacle.type == 1) {
-                        currentState = GAME_OVER;
-                        return;
-                    }
-                } 
-                // Если игрок на земле
-                else {
-                    // На земле умираем от любого препятствия
-                    currentState = GAME_OVER;
-                    return;
-                }
+    FloatRect playerBounds;
+    
+    if (playerSprite) {
+        playerBounds = playerSprite->getGlobalBounds();
+    } else {
+        playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
+    }
+    
+    // Проверка столкновений с бустами (всегда работает)
+    for (auto& boost : boosts) {
+        if (boost.active) {
+            FloatRect boostBounds(boost.position, boost.size);
+            if (playerBounds.findIntersection(boostBounds).has_value()) {
+                applyBoostEffect(boost.type);
+                boost.active = false;
             }
         }
     }
     
+    // ЕСЛИ АКТИВЕН МОПЕД - проверяем только для слома мопеда
+    if (isMopedActive) {
+        bool collisionHappened = false;
+        for (const auto& obstacle : obstacles) {
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                // Столкновение! Мопед ломается, но игра НЕ заканчивается
+                collisionHappened = true;
+                break;
+            }
+        }
+        
+        if (collisionHappened) {
+            // Мопед сломался, устанавливаем задержку
+            isMopedActive = false;
+            mopedTimer = 0.0f;
+            mopedCooldown = 1.0f; // 1 секунда задержки
+            // Возвращаем обычную анимацию персонажа
+            if (!runTextures.empty() && playerSprite) {
+                playerSprite->setTexture(runTextures[currentFrame]);
+            }
+        }
+        // Выходим из функции - при активном мопеде игра не заканчивается
+        return;
+    }
+    
+    // ЕСЛИ ЕСТЬ ЗАДЕРЖКА ПОСЛЕ ПОЛОМКИ МОПЕДА - игнорируем столкновения
+    if (mopedCooldown > 0.0f) {
+        return; // Игнорируем столкновения во время задержки
+    }
+    
+    // ДАЛЕЕ ПРОВЕРЯЕМ ТОЛЬКО ЕСЛИ МОПЕД НЕ АКТИВЕН И НЕТ ЗАДЕРЖКИ
+    
+    // ЕСЛИ АКТИВЕН МАКАСИН - МОЖНО ПЕРЕПРЫГИВАТЬ ГАРАЖИ В ПРЫЖКЕ
+    if (hasMacasinBoost) {
+        // Во время прыжка можно перепрыгнуть ВСЕ препятствия
+        if (isJumping || isFalling) {
+            return; // Может перепрыгнуть что угодно
+        }
+        // Но на земле уязвим для ВСЕХ препятствий
+        for (const auto& obstacle : obstacles) {
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                currentState = GAME_OVER;
+                return;
+            }
+        }
+        return;
+    }
+    
+    // ОБЫЧНАЯ ЛОГИКА (БЕЗ БУСТОВ)
+    if (isJumping || isFalling) {
+        // В прыжке можно перепрыгнуть только лавки (type 0)
+        for (const auto& obstacle : obstacles) {
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            if (obstacle.type == 1 && playerBounds.findIntersection(obstacleBounds).has_value()) {
+                // Столкновение с гаражом (type 1) в прыжке - смерть
+                currentState = GAME_OVER;
+                return;
+            }
+        }
+    } else {
+        // На земле умираем от любого препятствия
+        for (const auto& obstacle : obstacles) {
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                currentState = GAME_OVER;
+                return;
+            }
+        }
+    }
+}
+    
     void updateBoostTimers(float deltaTime) {
         std::string boostText = "";
-        
+            // Обновление задержки после поломки мопеда
+        if (mopedCooldown > 0.0f) {
+            mopedCooldown -= deltaTime;
+            if (mopedCooldown < 0.0f) {
+                mopedCooldown = 0.0f;
+            }
+        }
         // Обновление энергетика
         if (hasEnergyBoost) {
             energyTimer -= deltaTime;
@@ -497,6 +596,22 @@ public:
             }
         }
         
+        // Обновление мопеда
+        if (isMopedActive) {
+            mopedTimer -= deltaTime;
+            int secondsLeft = static_cast<int>(mopedTimer) + 1;
+            boostText += "MOPED: " + std::to_string(secondsLeft) + "s ";
+            
+            if (mopedTimer <= 0.0f) {
+                isMopedActive = false;
+            }
+        }
+        
+        // Показываем количество мопедов в инвентаре
+        if (mopedCount > 0) {
+            boostText += "MOPEDx" + std::to_string(mopedCount) + " [Q] ";
+        }
+        
         if (boostTimerText) {
             boostTimerText->setString(boostText);
         }
@@ -528,6 +643,12 @@ public:
                         jumpHeight = 0.0f;
                     }
                 }
+                else if (keyPressed->scancode == Keyboard::Scan::Q && mopedCount > 0 && !isMopedActive) {
+                    // Активируем мопед (используем один из инвентаря)
+                    isMopedActive = true;
+                    mopedTimer = MOPED_DURATION;
+                    mopedCount--;
+                }
                 else if (keyPressed->scancode == Keyboard::Scan::Escape) {
                     currentState = MENU;
                     resetGame();
@@ -540,7 +661,7 @@ public:
         }
     }
     
-    void resetGame() {
+        void resetGame() {
         obstacles.clear();
         boosts.clear();
         currentLane = 1;
@@ -561,20 +682,27 @@ public:
         hasMacasinBoost = false;
         macasinTimer = 0.0f;
         
+        mopedCount = 1;
+        isMopedActive = false;
+        mopedTimer = 0.0f;
+        mopedCooldown = 0.0f; // СБРАСЫВАЕМ ЗАДЕРЖКУ
+        mopedRideFrame = 0;
+        mopedRideAnimationTimer = 0.0f;
+        
         currentFrame = 0;
         animationTimer = 0.0f;
         
         if (!runTextures.empty() && playerSprite) {
-            playerSprite->setTexture(runTextures[0]);
-        }
+        playerSprite->setTexture(runTextures[0]);
+    }
         
         if (scoreText) {
-            scoreText->setString("Score: 0");
-        }
+        scoreText->setString("Score: 0");
+    }
         
         if (boostTimerText) {
-            boostTimerText->setString("");
-        }
+        boostTimerText->setString("");
+    }
         
         updatePlayerPosition();
         spawnClock.restart();
@@ -588,8 +716,20 @@ public:
             animationTimer += deltaTime;
             if (animationTimer >= frameTime) {
                 currentFrame = (currentFrame + 1) % runTextures.size();
-                playerSprite->setTexture(runTextures[currentFrame]);
+                if (!isMopedActive) {
+                    playerSprite->setTexture(runTextures[currentFrame]);
+                }
                 animationTimer = 0.0f;
+            }
+        }
+        
+        // АНИМАЦИЯ ЕЗДЫ НА МОПЕДЕ
+        if (isMopedActive && !mopedRideTextures.empty()) {
+            mopedRideAnimationTimer += deltaTime;
+            if (mopedRideAnimationTimer >= mopedRideFrameTime) {
+                mopedRideFrame = (mopedRideFrame + 1) % mopedRideTextures.size();
+                playerSprite->setTexture(mopedRideTextures[mopedRideFrame]);
+                mopedRideAnimationTimer = 0.0f;
             }
         }
         
@@ -717,6 +857,10 @@ public:
                         currentTexture = &macasinTexture;
                         fallbackColor = Color::Magenta;
                         break;
+                    case MOPED:
+                        currentTexture = &mopedItemTexture;
+                        fallbackColor = Color(150, 150, 150);
+                        break;
                 }
                 
                 if (currentTexture && currentTexture->getSize().x > 0) {
@@ -746,19 +890,29 @@ public:
         
         if (playerSprite) {
             // Визуальные эффекты для активных бустов
-            if (hasEnergyBoost && static_cast<int>(energyTimer * 10) % 2 == 0) {
-                playerSprite->setColor(Color(255, 100, 100)); // Красноватый оттенок
+            if (isMopedActive) {
+                // Мерцание для мопеда
+                if (static_cast<int>(mopedTimer * 10) % 2 == 0) {
+                    playerSprite->setColor(Color(100, 100, 255, 200));
+                } else {
+                    playerSprite->setColor(Color(200, 200, 255, 150));
+                }
+            }
+            else if (hasEnergyBoost && static_cast<int>(energyTimer * 10) % 2 == 0) {
+                playerSprite->setColor(Color(255, 100, 100));
             } else if (hasSeedsBoost && static_cast<int>(seedsTimer * 10) % 2 == 0) {
-                playerSprite->setColor(Color(100, 255, 255)); // Голубоватый оттенок
+                playerSprite->setColor(Color(100, 255, 255));
             } else if (hasMacasinBoost && static_cast<int>(macasinTimer * 10) % 2 == 0) {
-                playerSprite->setColor(Color(255, 100, 255)); // Розоватый оттенок
+                playerSprite->setColor(Color(255, 100, 255));
             } else {
                 playerSprite->setColor(Color::White);
             }
             window.draw(*playerSprite);
         } else {
             RectangleShape playerShape({50.0f, 50.0f});
-            if (hasEnergyBoost) {
+            if (isMopedActive) {
+                playerShape.setFillColor(Color::Blue);
+            } else if (hasEnergyBoost) {
                 playerShape.setFillColor(Color::Red);
             } else if (hasSeedsBoost) {
                 playerShape.setFillColor(Color::Cyan);
