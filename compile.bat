@@ -1,6 +1,6 @@
 @echo off
 chcp 65001
-echo Компиляция простой игры...
+echo Compilation...
 
 g++ main.cpp -o game.exe ^
 -ISFML-3.0.2/include ^
@@ -14,16 +14,15 @@ g++ main.cpp -o game.exe ^
 -static-libstdc++
 
 if exist game.exe (
-    echo ✅ КОМПИЛЯЦИЯ УСПЕШНА!
-    echo Копирование DLL...
+    echo COMPILATION SUCCESSFUL!
     copy SFML-3.0.2\bin\sfml-graphics-3.dll .
     copy SFML-3.0.2\bin\sfml-window-3.dll .
     copy SFML-3.0.2\bin\sfml-system-3.dll .
     echo.
-    echo 🎮 ЗАПУСК ИГРЫ...
+    echo STARTING THE GAME...
     echo.
     game.exe
 ) else (
-    echo ❌ Ошибка компиляции!
+    echo Compilation error!
     pause
 )

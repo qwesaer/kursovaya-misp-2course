@@ -7,7 +7,7 @@
 
 using namespace sf;
 
-class SimpleGame {
+class RussiaRunner {
 private:
     RenderWindow window;
     
@@ -16,6 +16,11 @@ private:
     Texture benchTexture;
     Texture garageTexture;
     Texture roadTexture;
+    Texture beerTexture;
+    Texture rubleTexture;
+    Texture energyTexture;
+    Texture seedsTexture;
+    Texture macasinTexture;
     Sprite* playerSprite = nullptr;
     
     // Анимация персонажа
@@ -27,6 +32,7 @@ private:
     // Дорога
     float roadOffset = 0.0f;
     float roadSpeed = 300.0f;
+    float baseRoadSpeed = 300.0f;
     
     // Игрок
     int currentLane = 1;
@@ -42,7 +48,7 @@ private:
     
     // Препятствия
     struct Obstacle {
-        int type;
+        int type; // 0 - лавка, 1 - гараж
         Vector2f position;
         Vector2f size;
     };
@@ -51,10 +57,36 @@ private:
     Clock spawnClock;
     bool firstFrame = true;
     
+    // Бусты
+    enum BoostType { BEER, RUBLE, ENERGY, SEEDS, MACASIN };
+    struct Boost {
+        int type;
+        Vector2f position;
+        Vector2f size;
+        bool active;
+    };
+    std::vector<Boost> boosts;
+    Clock boostSpawnClock;
+    
+    // Активные бусты
+    bool hasEnergyBoost = false;
+    float energyTimer = 0.0f;
+    const float ENERGY_DURATION = 15.0f;
+    
+    bool hasSeedsBoost = false;
+    float seedsTimer = 0.0f;
+    const float SEEDS_DURATION = 15.0f;
+    
+    bool hasMacasinBoost = false;
+    float macasinTimer = 0.0f;
+    const float MACASIN_DURATION = 15.0f;
+    
     // Счет
     int score = 0;
+    int scoreMultiplier = 1;
     Clock scoreClock;
     Text* scoreText = nullptr;
+    Text* boostTimerText = nullptr;
     
     // Меню
     enum GameState { MENU, PLAYING, CONTROLS, GAME_OVER };
@@ -67,12 +99,12 @@ private:
     Text* backText = nullptr;
     
 public:
-    SimpleGame() : window(VideoMode({600, 600}), "Russia runner") {
+    RussiaRunner() : window(VideoMode({600, 600}), "Russia runner") {
         std::srand(std::time(nullptr));
         setup();
     }
     
-    ~SimpleGame() {
+    ~RussiaRunner() {
         if (playerSprite) delete playerSprite;
         if (titleText) delete titleText;
         if (playText) delete playText;
@@ -80,11 +112,12 @@ public:
         if (exitText) delete exitText;
         if (backText) delete backText;
         if (scoreText) delete scoreText;
+        if (boostTimerText) delete boostTimerText;
     }
     
     void setup() {
         if (!font.openFromFile("C:/Windows/Fonts/arial.ttf")) {
-            std::cout << "❌ Не удалось загрузить шрифт" << std::endl;
+            return;
         }
         
         titleText = new Text(font, "RUSSIA RUNNER", 50);
@@ -107,36 +140,29 @@ public:
         scoreText->setFillColor(Color::White);
         scoreText->setPosition({10.0f, 10.0f});
         
+        boostTimerText = new Text(font, "", 25);
+        boostTimerText->setFillColor(Color::Yellow);
+        boostTimerText->setPosition({10.0f, 50.0f});
+        
         // Загружаем текстуры анимации
         for (int i = 1; i <= 4; ++i) {
             Texture texture;
             std::string filename = "spryte/run" + std::to_string(i) + ".png";
             if (!texture.loadFromFile(filename)) {
-                std::cout << "❌ Не удалось загрузить " << filename << std::endl;
             } else {
                 runTextures.push_back(texture);
-                std::cout << "✅ Загружен кадр анимации: " << filename << std::endl;
             }
         }
         
-        // Загружаем текстуру дороги
-        if (!roadTexture.loadFromFile("spryte/road.png")) {
-            std::cout << "❌ Не удалось загрузить spryte/road.png" << std::endl;
-        } else {
-            std::cout << "✅ Загружена текстура дороги" << std::endl;
-        }
-        
-        if (!benchTexture.loadFromFile("spryte/beanch.png")) {
-            std::cout << "❌ Не удалось загрузить spryte/beanch.png" << std::endl;
-        } else {
-            std::cout << "✅ Загружен спрайт лавки" << std::endl;
-        }
-        
-        if (!garageTexture.loadFromFile("spryte/garage.png")) {
-            std::cout << "❌ Не удалось загрузить spryte/garage.png" << std::endl;
-        } else {
-            std::cout << "✅ Загружен спрайт гаража" << std::endl;
-        }
+        // Загружаем текстуры
+        if (!roadTexture.loadFromFile("spryte/road.png")) {}
+        if (!benchTexture.loadFromFile("spryte/beanch.png")) {}
+        if (!garageTexture.loadFromFile("spryte/garage.png")) {}
+        if (!beerTexture.loadFromFile("spryte/beer.png")) {}
+        if (!rubleTexture.loadFromFile("spryte/ruble.png")) {}
+        if (!energyTexture.loadFromFile("spryte/energy.png")) {}
+        if (!seedsTexture.loadFromFile("spryte/seeds.png")) {}
+        if (!macasinTexture.loadFromFile("spryte/macasin.png")) {}
         
         float totalWidth = window.getSize().x;
         laneWidth = totalWidth / 4.0f;
@@ -146,23 +172,10 @@ public:
         // Создаем спрайт игрока
         if (!runTextures.empty()) {
             playerSprite = new Sprite(runTextures[0]);
-            std::cout << "✅ Анимация персонажа загружена, кадров: " << runTextures.size() << std::endl;
         } else if (playerTexture.loadFromFile("spryte/player.png")) {
             playerSprite = new Sprite(playerTexture);
-            std::cout << "✅ Загружен спрайт персонажа" << std::endl;
-        } else if (benchTexture.getSize().x > 0) {
-            playerSprite = new Sprite(benchTexture);
-            std::cout << "⚠️ Использована текстура лавки для персонажа" << std::endl;
-        } else if (garageTexture.getSize().x > 0) {
-            playerSprite = new Sprite(garageTexture);
-            std::cout << "⚠️ Использована текстура гаража для персонажа" << std::endl;
         } else {
-            if (!runTextures.empty()) {
-                playerSprite = new Sprite(runTextures[0]);
-            } else {
-                playerSprite = nullptr;
-                std::cout << "❌ Не удалось создать спрайт персонажа" << std::endl;
-            }
+            playerSprite = nullptr;
         }
         
         if (playerSprite) {
@@ -170,7 +183,6 @@ public:
         }
         
         updatePlayerPosition();
-        std::cout << "✅ Игра инициализирована" << std::endl;
     }
     
     void handleMenuInput() {
@@ -187,12 +199,10 @@ public:
                     if (playText->getGlobalBounds().contains(mousePos)) {
                         currentState = PLAYING;
                         resetGame();
-                        std::cout << "🎮 Начало игры!" << std::endl;
                     }
                     
                     if (controlsText->getGlobalBounds().contains(mousePos)) {
                         currentState = CONTROLS;
-                        std::cout << "🎮 Просмотр управления!" << std::endl;
                     }
                     
                     if (exitText->getGlobalBounds().contains(mousePos)) {
@@ -205,7 +215,6 @@ public:
                 if (keyPressed->scancode == Keyboard::Scan::Enter) {
                     currentState = PLAYING;
                     resetGame();
-                    std::cout << "🎮 Начало игры!" << std::endl;
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::Escape) {
                     window.close();
@@ -248,41 +257,56 @@ public:
     }
     
     void renderControls() {
-        window.clear(Color(30, 30, 50));
-        
-        Text controlsTitle(font, "CONTROLS", 50);
-        controlsTitle.setFillColor(Color::Yellow);
-        controlsTitle.setPosition({200.0f, 100.0f});
-        
-        Text moveText(font, "A/D or LEFT/RIGHT - Move", 30);
-        moveText.setFillColor(Color::White);
-        moveText.setPosition({150.0f, 200.0f});
-        
-        Text jumpText(font, "W or SPACE - Jump", 30);
-        jumpText.setFillColor(Color::White);
-        jumpText.setPosition({150.0f, 250.0f});
-        
-        Text menuText(font, "ESC - Back to Menu", 30);
-        menuText.setFillColor(Color::White);
-        menuText.setPosition({150.0f, 300.0f});
-        
-        Text restartText(font, "R - Restart (in game)", 30);
-        restartText.setFillColor(Color::White);
-        restartText.setPosition({150.0f, 350.0f});
-        
-        backText = new Text(font, "BACK (ESC)", 35);
-        backText->setFillColor(Color::Green);
-        backText->setPosition({220.0f, 450.0f});
-        
-        window.draw(controlsTitle);
-        window.draw(moveText);
-        window.draw(jumpText);
-        window.draw(menuText);
-        window.draw(restartText);
-        window.draw(*backText);
-        
-        window.display();
-    }
+    window.clear(Color(30, 30, 50));
+    
+    Text controlsTitle(font, "BOOSTS", 50);
+    controlsTitle.setFillColor(Color::Yellow);
+    controlsTitle.setPosition({220.0f, 60.0f});
+    
+    Text beerText(font, "BEER +100 points", 25);
+    beerText.setFillColor(Color(255, 200, 0));
+    beerText.setPosition({150.0f, 140.0f});
+    
+    Text rubleText(font, "RUBLE +50 points", 25);
+    rubleText.setFillColor(Color::Green);
+    rubleText.setPosition({150.0f, 180.0f});
+    
+    Text energyText(font, "ENERGY +20% speed (15s)", 25);
+    energyText.setFillColor(Color::Red);
+    energyText.setPosition({150.0f, 220.0f});
+    
+    Text seedsText(font, "SEEDS 2x points (15s)", 25);
+    seedsText.setFillColor(Color::Cyan);
+    seedsText.setPosition({150.0f, 260.0f});
+    
+    Text macasinText(font, "MACASIN jump over GARAGES (15s)", 25);
+    macasinText.setFillColor(Color::Magenta);
+    macasinText.setPosition({150.0f, 300.0f});
+    
+    Text menuText(font, "ESC - Back to Menu", 30);
+    menuText.setFillColor(Color::White);
+    menuText.setPosition({150.0f, 350.0f});
+    
+    Text restartText(font, "R - Restart (in game)", 30);
+    restartText.setFillColor(Color::White);
+    restartText.setPosition({150.0f, 400.0f});
+    
+    backText = new Text(font, "BACK (ESC)", 35);
+    backText->setFillColor(Color::Green);
+    backText->setPosition({220.0f, 470.0f});
+    
+    window.draw(controlsTitle);
+    window.draw(beerText);
+    window.draw(rubleText);
+    window.draw(energyText);
+    window.draw(seedsText);
+    window.draw(macasinText);
+    window.draw(menuText);
+    window.draw(restartText);
+    window.draw(*backText);
+    
+    window.display();
+}
     
     void updatePlayerPosition() {
         float x = lanePositions[currentLane] + laneWidth/2 - 25;
@@ -293,7 +317,7 @@ public:
     }
     
     void spawnObstacle() {
-        if (spawnClock.getElapsedTime().asSeconds() > 0.8f) {
+        if (spawnClock.getElapsedTime().asSeconds() > 0.5f) {
             Obstacle obstacle;
             obstacle.type = std::rand() % 2;
             
@@ -309,6 +333,22 @@ public:
             
             obstacles.push_back(obstacle);
             spawnClock.restart();
+        }
+    }
+    
+    void spawnBoost() {
+        if (boostSpawnClock.getElapsedTime().asSeconds() > 5.0f && boosts.size() < 3) {
+            Boost boost;
+            boost.type = std::rand() % 5; // 0-4: пиво, рубль, энергетик, семечки, макасин
+            boost.size = Vector2f{40.0f, 40.0f};
+            boost.active = true;
+            
+            int lane = std::rand() % 3;
+            float x = lanePositions[lane] + laneWidth/2 - boost.size.x/2;
+            boost.position = {x, -boost.size.y};
+            
+            boosts.push_back(boost);
+            boostSpawnClock.restart();
         }
     }
     
@@ -331,6 +371,50 @@ public:
             obstacles.end());
     }
     
+    void updateBoosts(float deltaTime) {
+        for (auto& boost : boosts) {
+            if (boost.active) {
+                boost.position.y += obstacleSpeed * deltaTime;
+            }
+        }
+        
+        boosts.erase(std::remove_if(boosts.begin(), boosts.end(),
+            [](const Boost& b) { 
+                return b.position.y > 650.0f || !b.active;
+            }),
+            boosts.end());
+    }
+    
+    void applyBoostEffect(int boostType) {
+        switch (boostType) {
+            case BEER:
+                score += 100;
+                break;
+                
+            case RUBLE:
+                score += 50;
+                break;
+                
+            case ENERGY:
+                hasEnergyBoost = true;
+                energyTimer = ENERGY_DURATION;
+                roadSpeed = baseRoadSpeed * 1.2f;
+                obstacleSpeed = 300.0f * 1.2f;
+                break;
+                
+            case SEEDS:
+                hasSeedsBoost = true;
+                seedsTimer = SEEDS_DURATION;
+                scoreMultiplier = 2;
+                break;
+                
+            case MACASIN:
+                hasMacasinBoost = true;
+                macasinTimer = MACASIN_DURATION;
+                break;
+        }
+    }
+    
     void checkCollisions() {
         FloatRect playerBounds;
         
@@ -340,25 +424,81 @@ public:
             playerBounds = FloatRect({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight}, {50.0f, 50.0f});
         }
         
-        if (isJumping || isFalling) {
-            for (const auto& obstacle : obstacles) {
-                FloatRect obstacleBounds(obstacle.position, obstacle.size);
-                if (obstacle.type == 1 && playerBounds.findIntersection(obstacleBounds).has_value()) {
+        // Проверка столкновений с бустами
+        for (auto& boost : boosts) {
+            if (boost.active) {
+                FloatRect boostBounds(boost.position, boost.size);
+                if (playerBounds.findIntersection(boostBounds).has_value()) {
+                    applyBoostEffect(boost.type);
+                    boost.active = false;
+                }
+            }
+        }
+        
+        // Проверка столкновений с препятствиями
+        for (const auto& obstacle : obstacles) {
+            FloatRect obstacleBounds(obstacle.position, obstacle.size);
+            
+            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
+                // Если игрок в прыжке
+                if (isJumping || isFalling) {
+                    // БЕЗ макасина: можно перепрыгнуть только лавки (type 0)
+                    if (!hasMacasinBoost && obstacle.type == 1) {
+                        currentState = GAME_OVER;
+                        return;
+                    }
+                } 
+                // Если игрок на земле
+                else {
+                    // На земле умираем от любого препятствия
                     currentState = GAME_OVER;
-                    std::cout << "💥 Игра окончена!" << std::endl;
                     return;
                 }
             }
-            return;
+        }
+    }
+    
+    void updateBoostTimers(float deltaTime) {
+        std::string boostText = "";
+        
+        // Обновление энергетика
+        if (hasEnergyBoost) {
+            energyTimer -= deltaTime;
+            int secondsLeft = static_cast<int>(energyTimer) + 1;
+            boostText += "ENERGY: " + std::to_string(secondsLeft) + "s ";
+            
+            if (energyTimer <= 0.0f) {
+                hasEnergyBoost = false;
+                roadSpeed = baseRoadSpeed;
+                obstacleSpeed = 300.0f;
+            }
         }
         
-        for (const auto& obstacle : obstacles) {
-            FloatRect obstacleBounds(obstacle.position, obstacle.size);
-            if (playerBounds.findIntersection(obstacleBounds).has_value()) {
-                currentState = GAME_OVER;
-                std::cout << "💥 Игра окончена!" << std::endl;
-                return;
+        // Обновление семечек
+        if (hasSeedsBoost) {
+            seedsTimer -= deltaTime;
+            int secondsLeft = static_cast<int>(seedsTimer) + 1;
+            boostText += "SEEDS: " + std::to_string(secondsLeft) + "s ";
+            
+            if (seedsTimer <= 0.0f) {
+                hasSeedsBoost = false;
+                scoreMultiplier = 1;
             }
+        }
+        
+        // Обновление макасина
+        if (hasMacasinBoost) {
+            macasinTimer -= deltaTime;
+            int secondsLeft = static_cast<int>(macasinTimer) + 1;
+            boostText += "MACASIN: " + std::to_string(secondsLeft) + "s ";
+            
+            if (macasinTimer <= 0.0f) {
+                hasMacasinBoost = false;
+            }
+        }
+        
+        if (boostTimerText) {
+            boostTimerText->setString(boostText);
         }
     }
     
@@ -373,14 +513,12 @@ public:
                 if (keyPressed->scancode == Keyboard::Scan::A || keyPressed->scancode == Keyboard::Scan::Left) {
                     if (currentLane > 0) {
                         currentLane--;
-                        std::cout << "← Движение влево, полоса: " << currentLane << std::endl;
                     }
                     updatePlayerPosition();
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::D || keyPressed->scancode == Keyboard::Scan::Right) {
                     if (currentLane < 2) {
                         currentLane++;
-                        std::cout << "→ Движение вправо, полоса: " << currentLane << std::endl;
                     }
                     updatePlayerPosition();
                 }
@@ -388,7 +526,6 @@ public:
                     if (!isJumping && !isFalling) {
                         isJumping = true;
                         jumpHeight = 0.0f;
-                        std::cout << "↑ Прыжок!" << std::endl;
                     }
                 }
                 else if (keyPressed->scancode == Keyboard::Scan::Escape) {
@@ -398,7 +535,6 @@ public:
                 else if (keyPressed->scancode == Keyboard::Scan::R && currentState == GAME_OVER) {
                     currentState = PLAYING;
                     resetGame();
-                    std::cout << "🔄 Рестарт игры!" << std::endl;
                 }
             }
         }
@@ -406,13 +542,24 @@ public:
     
     void resetGame() {
         obstacles.clear();
+        boosts.clear();
         currentLane = 1;
         isJumping = false;
         isFalling = false;
         jumpHeight = 0.0f;
         score = 0;
+        scoreMultiplier = 1;
         scoreClock.restart();
         roadOffset = 0.0f;
+        roadSpeed = baseRoadSpeed;
+        obstacleSpeed = 300.0f;
+        
+        hasEnergyBoost = false;
+        energyTimer = 0.0f;
+        hasSeedsBoost = false;
+        seedsTimer = 0.0f;
+        hasMacasinBoost = false;
+        macasinTimer = 0.0f;
         
         currentFrame = 0;
         animationTimer = 0.0f;
@@ -425,10 +572,14 @@ public:
             scoreText->setString("Score: 0");
         }
         
+        if (boostTimerText) {
+            boostTimerText->setString("");
+        }
+        
         updatePlayerPosition();
         spawnClock.restart();
+        boostSpawnClock.restart();
         firstFrame = true;
-        std::cout << "🔄 Игра сброшена!" << std::endl;
     }
     
     void update(float deltaTime) {
@@ -465,19 +616,21 @@ public:
             updatePlayerPosition();
         }
         
+        // ОБНОВЛЕНИЕ СЧЕТА
         if (scoreClock.getElapsedTime().asSeconds() >= 1.0f) {
-            score += 10;
+            score += 10 * scoreMultiplier;
             scoreClock.restart();
             
             if (scoreText) {
                 scoreText->setString("Score: " + std::to_string(score));
             }
-            
-            std::cout << "⭐ Score: " << score << std::endl;
         }
         
         spawnObstacle();
+        spawnBoost();
         updateObstacles(deltaTime);
+        updateBoosts(deltaTime);
+        updateBoostTimers(deltaTime);
         checkCollisions();
     }
     
@@ -491,7 +644,7 @@ public:
             Vector2f roadSpriteSize = {originalRoadSize.x * scaleFactor, originalRoadSize.y * scaleFactor};
             
             for (int i = 0; i < 3; ++i) {
-                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 2; // +2 для перекрытия
+                int tilesNeeded = static_cast<int>(600.0f / roadSpriteSize.y) + 2;
                 for (int j = -1; j < tilesNeeded; ++j) {
                     Sprite roadSprite(roadTexture);
                     float posX = lanePositions[i] + 1.0f;
@@ -503,7 +656,6 @@ public:
                 }
             }
         } else {
-            // Запасной вариант без текстуры дороги
             for (int i = 0; i < 3; ++i) {
                 RectangleShape lane({laneWidth - 2.0f, 600.0f});
                 lane.setPosition({lanePositions[i] + 1.0f, 0.0f});
@@ -512,6 +664,7 @@ public:
             }
         }
         
+        // Отрисовка препятствий
         for (const auto& obstacle : obstacles) {
             if (obstacle.type == 0 && benchTexture.getSize().x > 0) {
                 Sprite benchSprite(benchTexture);
@@ -537,15 +690,83 @@ public:
             }
         }
         
+        // Отрисовка бустов
+        for (const auto& boost : boosts) {
+            if (boost.active) {
+                Texture* currentTexture = nullptr;
+                Color fallbackColor;
+                
+                switch (boost.type) {
+                    case BEER:
+                        currentTexture = &beerTexture;
+                        fallbackColor = Color(255, 200, 0);
+                        break;
+                    case RUBLE:
+                        currentTexture = &rubleTexture;
+                        fallbackColor = Color::Green;
+                        break;
+                    case ENERGY:
+                        currentTexture = &energyTexture;
+                        fallbackColor = Color::Red;
+                        break;
+                    case SEEDS:
+                        currentTexture = &seedsTexture;
+                        fallbackColor = Color::Cyan;
+                        break;
+                    case MACASIN:
+                        currentTexture = &macasinTexture;
+                        fallbackColor = Color::Magenta;
+                        break;
+                }
+                
+                if (currentTexture && currentTexture->getSize().x > 0) {
+                    Sprite boostSprite(*currentTexture);
+                    Vector2u texSize = currentTexture->getSize();
+                    float scaleX = boost.size.x / texSize.x;
+                    float scaleY = boost.size.y / texSize.y;
+                    boostSprite.setScale({scaleX, scaleY});
+                    boostSprite.setPosition(boost.position);
+                    window.draw(boostSprite);
+                } else {
+                    RectangleShape boostShape(boost.size);
+                    boostShape.setFillColor(fallbackColor);
+                    boostShape.setPosition(boost.position);
+                    window.draw(boostShape);
+                }
+            }
+        }
+        
         if (scoreText) {
             window.draw(*scoreText);
         }
         
+        if (boostTimerText) {
+            window.draw(*boostTimerText);
+        }
+        
         if (playerSprite) {
+            // Визуальные эффекты для активных бустов
+            if (hasEnergyBoost && static_cast<int>(energyTimer * 10) % 2 == 0) {
+                playerSprite->setColor(Color(255, 100, 100)); // Красноватый оттенок
+            } else if (hasSeedsBoost && static_cast<int>(seedsTimer * 10) % 2 == 0) {
+                playerSprite->setColor(Color(100, 255, 255)); // Голубоватый оттенок
+            } else if (hasMacasinBoost && static_cast<int>(macasinTimer * 10) % 2 == 0) {
+                playerSprite->setColor(Color(255, 100, 255)); // Розоватый оттенок
+            } else {
+                playerSprite->setColor(Color::White);
+            }
             window.draw(*playerSprite);
         } else {
             RectangleShape playerShape({50.0f, 50.0f});
-            playerShape.setFillColor(Color::Blue);
+            if (hasEnergyBoost) {
+                playerShape.setFillColor(Color::Red);
+            } else if (hasSeedsBoost) {
+                playerShape.setFillColor(Color::Cyan);
+            } else if (hasMacasinBoost) {
+                playerShape.setFillColor(Color::Magenta);
+            } else {
+                playerShape.setFillColor(Color::Blue);
+            }
             playerShape.setPosition({lanePositions[currentLane] + laneWidth/2 - 25, 500.0f - jumpHeight});
             window.draw(playerShape);
         }
@@ -583,9 +804,6 @@ public:
     void run() {
         Clock clock;
         
-        std::cout << "=== RUSSIA RUNNER ===" << std::endl;
-        std::cout << "🎮 Игра запущена!" << std::endl;
-        
         while (window.isOpen()) {
             float deltaTime = clock.restart().asSeconds();
             
@@ -616,8 +834,7 @@ public:
 };
 
 int main() {
-    SimpleGame game;
+    RussiaRunner game;
     game.run();
-    std::cout << "Игра завершена" << std::endl;
     return 0;
 }
