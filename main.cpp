@@ -25,6 +25,17 @@ private:
     std::vector<Texture> mopedRideTextures;
     Sprite* playerSprite = nullptr;
     
+    // Спутник (точная копия игрока)
+    std::vector<Texture> followerRunTextures;
+    Sprite* followerSprite = nullptr;
+    int followerCurrentFrame = 0;
+    float followerAnimationTimer = 0.0f;
+    float followerFrameTime = 0.1f;
+    int followerLane = 1;
+    bool followerIsJumping = false;
+    bool followerIsFalling = false;
+    float followerJumpHeight = 0.0f;
+    
     // Анимация бега
     std::vector<Texture> runTextures;
     int currentFrame = 0;
@@ -121,6 +132,7 @@ public:
     
     ~RussiaRunner() {
         if (playerSprite) delete playerSprite;
+        if (followerSprite) delete followerSprite;
         if (titleText) delete titleText;
         if (playText) delete playText;
         if (controlsText) delete controlsText;
@@ -171,6 +183,17 @@ public:
             }
         }
         
+        // Загрузка текстур анимации бега спутника
+        for (int i = 1; i <= 3; ++i) {
+            Texture texture;
+            std::string filename = "spryte/follower_run" + std::to_string(i) + ".png";
+            if (!texture.loadFromFile(filename)) {
+                std::cout << "Could not load follower texture: " << filename << std::endl;
+            } else {
+                followerRunTextures.push_back(texture);
+            }
+        }
+        
         // Загрузка текстур объектов
         if (!roadTexture.loadFromFile("spryte/road.png")) {}
         if (!benchTexture.loadFromFile("spryte/beanch.png")) {}
@@ -212,7 +235,48 @@ public:
             playerSprite->setScale({0.8f, 0.8f});
         }
         
+        // Создание спрайта спутника
+        if (!followerRunTextures.empty()) {
+            followerSprite = new Sprite(followerRunTextures[0]);
+            followerSprite->setScale({0.8f, 0.8f});
+        } else {
+            followerSprite = nullptr;
+        }
+        
         updatePlayerPosition();
+        updateFollowerPosition();
+    }
+    
+    // Обновление позиции спутника
+    void updateFollowerPosition() {
+        float x = lanePositions[followerLane] + laneWidth/2 - 25;
+        float y = 550.0f - followerJumpHeight;
+        if (followerSprite) {
+            followerSprite->setPosition({x, y});
+        }
+    }
+    
+    // Обновление анимации спутника
+    void updateFollowerAnimation(float deltaTime) {
+        if (!followerRunTextures.empty() && followerSprite) {
+            followerAnimationTimer += deltaTime;
+            if (followerAnimationTimer >= followerFrameTime) {
+                followerCurrentFrame = (followerCurrentFrame + 1) % followerRunTextures.size();
+                followerSprite->setTexture(followerRunTextures[followerCurrentFrame]);
+                followerAnimationTimer = 0.0f;
+            }
+        }
+    }
+    
+    // Обновление логики спутника
+    void updateFollower(float deltaTime) {
+        followerLane = currentLane;
+        followerIsJumping = isJumping;
+        followerIsFalling = isFalling;
+        followerJumpHeight = jumpHeight;
+        
+        updateFollowerPosition();
+        updateFollowerAnimation(deltaTime);
     }
     
     // Обработка ввода в меню
@@ -699,8 +763,20 @@ public:
         currentFrame = 0;
         animationTimer = 0.0f;
         
+        // Сброс спутника
+        followerLane = 1;
+        followerIsJumping = false;
+        followerIsFalling = false;
+        followerJumpHeight = 0.0f;
+        followerCurrentFrame = 0;
+        followerAnimationTimer = 0.0f;
+        
         if (!runTextures.empty() && playerSprite) {
             playerSprite->setTexture(runTextures[0]);
+        }
+        
+        if (!followerRunTextures.empty() && followerSprite) {
+            followerSprite->setTexture(followerRunTextures[0]);
         }
         
         if (scoreText) {
@@ -712,6 +788,7 @@ public:
         }
         
         updatePlayerPosition();
+        updateFollowerPosition();
         spawnClock.restart();
         boostSpawnClock.restart();
         firstFrame = true;
@@ -764,6 +841,9 @@ public:
             }
             updatePlayerPosition();
         }
+        
+        // Обновление спутника
+        updateFollower(deltaTime);
         
         // Обновление счета
         if (scoreClock.getElapsedTime().asSeconds() >= 1.0f) {
@@ -888,6 +968,11 @@ public:
                     window.draw(boostShape);
                 }
             }
+        }
+        
+        // Отрисовка спутника 
+        if (followerSprite) {
+            window.draw(*followerSprite);
         }
         
         if (scoreText) {
