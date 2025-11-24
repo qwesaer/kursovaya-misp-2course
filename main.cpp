@@ -25,7 +25,7 @@ private:
     std::vector<Texture> mopedRideTextures;
     Sprite* playerSprite = nullptr;
     
-    // Спутник (точная копия игрока)
+    // Спутник с задержкой
     std::vector<Texture> followerRunTextures;
     Sprite* followerSprite = nullptr;
     int followerCurrentFrame = 0;
@@ -35,6 +35,12 @@ private:
     bool followerIsJumping = false;
     bool followerIsFalling = false;
     float followerJumpHeight = 0.0f;
+    
+    // Задержка действий спутника
+    float followerActionDelay = 0.15f; // Задержка 0.15 секунды
+    float followerActionTimer = 0.0f;
+    bool followerNeedsToJump = false;
+    int followerTargetLane = 1;
     
     // Анимация бега
     std::vector<Texture> runTextures;
@@ -250,7 +256,7 @@ public:
     // Обновление позиции спутника
     void updateFollowerPosition() {
         float x = lanePositions[followerLane] + laneWidth/2 - 25;
-        float y = 550.0f - followerJumpHeight;
+        float y = 560.0f - followerJumpHeight;
         if (followerSprite) {
             followerSprite->setPosition({x, y});
         }
@@ -268,14 +274,53 @@ public:
         }
     }
     
-    // Обновление логики спутника
+    // Обновление логики спутника с задержкой
     void updateFollower(float deltaTime) {
-        followerLane = currentLane;
-        followerIsJumping = isJumping;
-        followerIsFalling = isFalling;
-        followerJumpHeight = jumpHeight;
+        followerActionTimer += deltaTime;
         
-        updateFollowerPosition();
+        if (followerActionTimer >= followerActionDelay) {
+            // Обновляем действия спутника с задержкой
+            followerTargetLane = currentLane;
+            followerNeedsToJump = isJumping && !isFalling;
+            
+            followerActionTimer = 0.0f;
+        }
+        
+        // Плавное перемещение между полосами
+        if (followerLane != followerTargetLane) {
+            if (followerLane < followerTargetLane) {
+                followerLane++;
+            } else if (followerLane > followerTargetLane) {
+                followerLane--;
+            }
+            updateFollowerPosition();
+        }
+        
+        // Прыжок с задержкой
+        if (followerNeedsToJump && !followerIsJumping && !followerIsFalling) {
+            followerIsJumping = true;
+            followerJumpHeight = 0.0f;
+            followerNeedsToJump = false;
+        }
+        
+        // Логика прыжка спутника
+        if (followerIsJumping) {
+            followerJumpHeight += jumpSpeed * deltaTime;
+            if (followerJumpHeight >= maxJumpHeight) {
+                followerIsJumping = false;
+                followerIsFalling = true;
+            }
+            updateFollowerPosition();
+        }
+        else if (followerIsFalling) {
+            followerJumpHeight -= jumpSpeed * deltaTime;
+            if (followerJumpHeight <= 0.0f) {
+                followerIsFalling = false;
+                followerJumpHeight = 0.0f;
+            }
+            updateFollowerPosition();
+        }
+        
         updateFollowerAnimation(deltaTime);
     }
     
@@ -770,6 +815,9 @@ public:
         followerJumpHeight = 0.0f;
         followerCurrentFrame = 0;
         followerAnimationTimer = 0.0f;
+        followerActionTimer = 0.0f;
+        followerNeedsToJump = false;
+        followerTargetLane = 1;
         
         if (!runTextures.empty() && playerSprite) {
             playerSprite->setTexture(runTextures[0]);
@@ -970,7 +1018,7 @@ public:
             }
         }
         
-        // Отрисовка спутника 
+        // Отрисовка спутника (позади игрока)
         if (followerSprite) {
             window.draw(*followerSprite);
         }
